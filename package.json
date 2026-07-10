@@ -1,0 +1,39 @@
+{
+  "name": "prototype-agent-kit",
+  "version": "0.1.0",
+  "description": "本地原型工作台：左侧树形导航 + 中间原型预览 + 右侧 AI Agent（OpenCode）。PRD 与 HTML/JS 原型协作，含自动化检查。",
+  "keywords": ["prototype", "prd", "opencode", "agent", "scaffold", "product-manager"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=16"
+  },
+  "bin": {
+    "prototype-agent": "bin/cli.js"
+  },
+  "main": "runtime/server.js",
+  "scripts": {
+    "serve": "node runtime/server.js",
+    "start": "node runtime/server.js",
+    "check": "node scripts/check/run-checks.js",
+    "check:changed": "node scripts/check/run-checks.js --changed",
+    "check:static": "node scripts/check/static-check.js",
+    "check:smoke": "node scripts/check/smoke-test.js",
+    "nav:sync": "node scripts/check/sync-nav-tree.js",
+    "doctor": "node bin/cli.js doctor",
+    "postinstall:browser": "playwright install chromium"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "runtime/",
+    "scripts/",
+    "templates/",
+    "product/demo/",
+    "proto-kit.config.json",
+    "AGENTS.md",
+    "README.md"
+  ],
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

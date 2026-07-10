@@ -1,0 +1,10 @@
+node_modules/
+.DS_Store
+.idea/
+.vscode/
+.claude/
+.codex/
+.opencode/
+.playwright-cli/
+scripts/check/_screenshots/
+*.log

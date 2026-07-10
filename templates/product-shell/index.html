@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>{{PRODUCT_TITLE}} 原型导航</title>
+<!-- agent-panel:start (本地开发专用；发布时可由 prototype-agent publish 自动剥离) -->
+<link rel="stylesheet" href="/_kit/shell/agent-panel.css">
+<!-- agent-panel:end -->
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  font-size: 13px;
+  color: #20242d;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ══════════════════════════════
+   LEFT SIDEBAR
+══════════════════════════════ */
+.sidebar {
+  width: 290px;
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-right: 1px solid #dfe5ee;
+  overflow: hidden;
+}
+
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 100%;
+  display: block;
+  border: 0;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.01);
+  cursor: ew-resize;
+  z-index: 1000;
+}
+.sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 2px;
+  height: 100%;
+  background: transparent;
+  transition: background 0.12s;
+}
+.sidebar-resizer:hover::after,
+.sidebar-resizer.is-resizing::after {
+  background: #1677ff;
+}
+body.is-resizing-sidebar {
+  cursor: ew-resize;
+  user-select: none;
+}
+body.is-resizing-sidebar .preview-frame {
+  pointer-events: none;
+}
+
+.sidebar-header {
+  flex-shrink: 0;
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid #edf0f5;
+}
+.sidebar-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #20242d;
+  margin-bottom: 8px;
+}
+.sidebar-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.sidebar-title-row .sidebar-title {
+  flex: 1;
+  margin-bottom: 0;
+}
+.copy-address-btn {
+  flex-shrink: 0;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid #1677ff;
+  border-radius: 8px;
+  background: #fff;
+  color: #1677ff;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.copy-address-btn:hover {
+  background: #edf6ff;
+  border-color: #0d5edb;
+  color: #0d5edb;
+}
+.version-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.version-label { font-size: 11px; color: #7b8495; white-space: nowrap; }
+.version-search-control {
+  display: flex;
+  flex: 1 1 100px;
+  min-width: 100px;
+}
+.version-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #dfe5ee;
+  border-radius: 4px 0 0 4px;
+  padding: 3px 7px;
+  font-size: 12px;
+  color: #20242d;
+  outline: none;
+}
+.version-input:focus { border-color: #1677ff; }
+.version-search-btn {
+  width: 34px;
+  flex-shrink: 0;
+  border: 1px solid #1677ff;
+  border-left: 0;
+  border-radius: 0 4px 4px 0;
+  background: #1677ff;
+  color: #fff;
+  font-size: 10px;
+  cursor: pointer;
+}
+.version-search-btn:hover { background: #0d5edb; }
+.version-history {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.version-history-empty {
+  color: #a8b2c3;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.version-history-tag {
+  max-width: 58px;
+  height: 22px;
+  padding: 0 5px;
+  overflow: hidden;
+  border: 1px solid #bfdbff;
+  border-radius: 4px;
+  background: #edf6ff;
+  color: #1677ff;
+  font-size: 10px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.version-history-tag:hover {
+  background: #d9ebff;
+  border-color: #7cb5ff;
+}
+.version-history-clear {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #7b8495;
+  font-size: 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.version-history-clear[hidden] { display: none; }
+.version-history-clear:hover { color: #d91f2f; }
+.nav-search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.nav-search-input {
+  flex: 1;
+  border: 1px solid #dfe5ee;
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-size: 12px;
+  color: #20242d;
+  outline: none;
+}
+.nav-search-input:focus { border-color: #1677ff; }
+
+.stats-row {
+  font-size: 11px;
+  color: #7b8495;
+  margin-bottom: 7px;
+}
+.stats-row b { color: #1677ff; font-weight: 600; }
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.btn {
+  padding: 3px 9px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  border: 1px solid #dfe5ee;
+  background: #fff;
+  color: #4f5665;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.btn:hover { background: #f0f5ff; color: #1677ff; border-color: #bfdbff; }
+.btn-primary {
+  background: #1677ff;
+  border-color: #1677ff;
+  color: #fff;
+  margin-left: auto;
+}
+.btn-primary:hover { background: #0d5edb; }
+
+.filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #4f5665;
+  cursor: pointer;
+  user-select: none;
+}
+.filter-toggle input { cursor: pointer; accent-color: #1677ff; }
+
+/* ── Tree ── */
+.sidebar-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0 12px;
+}
+.sidebar-tree::-webkit-scrollbar { width: 4px; }
+.sidebar-tree::-webkit-scrollbar-thumb { background: #dfe5ee; border-radius: 4px; }
+
+.file-row.search-hidden,
+.folder.search-hidden { display: none; }
+.sidebar-tree.is-searching .folder.search-match-folder > .folder-children { display: block; }
+.sidebar-tree.is-searching .folder.search-match-folder > .folder-head .folder-arrow { transform: none; }
+
+/* ── Folder ── */
+.folder-head {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  cursor: pointer;
+  user-select: none;
+  color: #20242d;
+  font-weight: 500;
+  font-size: 12.5px;
+}
+.folder-head:hover { background: #f6f9ff; }
+.folder-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px; height: 14px;
+  transition: transform 0.15s;
+  color: #7b8495;
+  flex-shrink: 0;
+}
+.folder-arrow svg { width: 9px; height: 9px; fill: currentColor; }
+.folder.collapsed > .folder-children { display: none; }
+.folder.collapsed > .folder-head .folder-arrow { transform: rotate(-90deg); }
+.folder-icon { color: #f5a400; flex-shrink: 0; }
+.folder-icon svg { width: 13px; height: 13px; fill: currentColor; display: block; }
+
+/* ── File row ── */
+.file-row {
+  display: flex;
+  flex-direction: column;
+  padding: 0 8px;
+  cursor: pointer;
+  border-radius: 0;
+}
+.file-row:hover .file-main { background: #f0f5ff; border-radius: 4px; }
+.file-row.active .file-main {
+  background: #1677ff;
+  border-radius: 4px;
+}
+.file-row.active .file-name { color: #fff; }
+.file-row.active .file-icon { color: #bfdbff; }
+.file-row.active .review-btn { border-color: rgba(255,255,255,0.45); color: rgba(255,255,255,0.78); }
+.file-row.active .review-btn.is-reviewed { background: rgba(255,255,255,0.18); color: #fff; }
+
+.file-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  min-width: 0;
+}
+.file-icon { color: #94c5ff; flex-shrink: 0; }
+.file-icon svg { width: 12px; height: 12px; fill: currentColor; display: block; }
+.file-name {
+  flex: 1;
+  font-size: 12px;
+  color: #20242d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+/* ══════════════════════════════
+   RIGHT PREVIEW
+══════════════════════════════ */
+.preview {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #f3f3f3;
+}
+
+.preview-bar {
+  height: 38px;
+  background: #fff;
+  border-bottom: 1px solid #dfe5ee;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.preview-breadcrumb {
+  font-size: 12px;
+  color: #7b8495;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preview-breadcrumb b { color: #20242d; }
+.preview-open-btn {
+  font-size: 11px;
+  color: #1677ff;
+  cursor: pointer;
+  text-decoration: none;
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border: 1px solid #bfdbff;
+  border-radius: 4px;
+  background: #edf6ff;
+}
+.preview-open-btn:hover { background: #d9ebff; }
+
+.preview-frame {
+  flex: 1;
+  border: none;
+  display: block;
+}
+
+.preview-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #a8b2c3;
+}
+.preview-placeholder svg { width: 48px; height: 48px; fill: #dfe5ee; }
+.preview-placeholder p { font-size: 13px; }
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #20242d;
+  color: #fff;
+  padding: 7px 18px;
+  border-radius: 6px;
+  font-size: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  z-index: 9999;
+}
+.toast.show { opacity: 1; }
+
+/* ── Version badge ── */
+.version-badge {
+  flex-shrink: 0;
+  display: inline-block;
+  background: #edf6ff;
+  border: 1px solid #bfdbff;
+  border-radius: 3px;
+  padding: 0 5px;
+  font-size: 10px;
+  color: #1677ff;
+  white-space: nowrap;
+  font-weight: 600;
+  line-height: 16px;
+  visibility: hidden;
+}
+.version-badge.loaded { visibility: visible; }
+.version-badge.match {
+  background: #e9faea;
+  border-color: #88e69e;
+  color: #0f9f31;
+}
+.review-btn {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border: 1px solid #d8dfe9;
+  border-radius: 3px;
+  background: #fff;
+  color: #8a94a6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+.review-btn:hover { border-color: #1677ff; color: #1677ff; background: #f0f5ff; }
+.review-btn.is-reviewed {
+  background: #e9faea;
+  border-color: #88e69e;
+  color: #0f9f31;
+}
+/* version filter: hide rows whose badge doesn't match */
+.filter-by-version .file-row:not(.version-match) { display: none; }
+</style>
+</head>
+<body>
+
+<!-- ═══ LEFT SIDEBAR ═══ -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-title-row">
+      <div class="sidebar-title">{{PRODUCT_TITLE}} 原型导航</div>
+      <button class="copy-address-btn" id="copyAddressBtn" type="button">复制地址</button>
+    </div>
+    <div class="version-row">
+      <span class="version-label">版本</span>
+      <div class="version-search-control">
+        <input class="version-input" id="versionInput" type="text" placeholder="V2.10.0">
+        <button class="version-search-btn" id="versionSearchBtn" type="button">搜索</button>
+      </div>
+      <div class="version-history" id="versionHistory" aria-label="历史版本"></div>
+      <button class="version-history-clear" id="clearVersionHistoryBtn" type="button" aria-label="清空历史版本" hidden>清空</button>
+    </div>
+    <div class="nav-search-row">
+      <span class="version-label">搜索</span>
+      <input class="nav-search-input" id="navSearchInput" type="search" placeholder="搜索标题">
+    </div>
+    <div class="stats-row">
+      共 <b id="totalCount">0</b> 个页面 &nbsp;·&nbsp; 该版本 <b id="versionMatchCount">0</b> 个
+    </div>
+    <div class="toolbar">
+      <label class="filter-toggle">
+        <input type="checkbox" id="versionFilterToggle"> 只显该版本
+      </label>
+      <button class="btn" id="expandAllBtn">全部展开</button>
+      <button class="btn" id="collapseAllBtn">全部折叠</button>
+    </div>
+  </div>
+
+  <div class="sidebar-tree" id="sidebarTree"></div>
+  <button class="sidebar-resizer" id="sidebarResizer" type="button" aria-label="拖动调整导航栏宽度"></button>
+</div>
+
+<!-- ═══ RIGHT PREVIEW ═══ -->
+<div class="preview" id="previewArea">
+  <div class="preview-bar" id="previewBar" style="display:none">
+    <span class="preview-breadcrumb" id="previewBreadcrumb"></span>
+    <a class="preview-open-btn" id="previewOpenBtn" target="_blank">在新标签打开 ↗</a>
+  </div>
+  <div class="preview-placeholder" id="previewPlaceholder">
+    <svg viewBox="0 0 48 48"><rect x="6" y="8" width="36" height="32" rx="3"/><rect x="12" y="16" width="24" height="2" rx="1" fill="#fff" fill-opacity=".5"/><rect x="12" y="22" width="16" height="2" rx="1" fill="#fff" fill-opacity=".5"/></svg>
+    <p>← 点击左侧页面预览</p>
+  </div>
+  <iframe class="preview-frame" id="previewFrame" style="display:none"></iframe>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────
+//  PAGE TREE — 运行时从同目录 nav-tree.json 拉取，由
+//  scripts/check/sync-nav-tree.js 自动同步文件系统新增/删除的页面
+// ─────────────────────────────────────────────
+let TREE = [];
+async function loadTree() {
+  const res = await fetch('./nav-tree.json', { cache: 'no-cache' });
+  if (!res.ok) throw new Error('nav-tree.json 加载失败：' + res.status);
+  TREE = await res.json();
+}
+
+// ─────────────────────────────────────────────
+//  Storage
+// ─────────────────────────────────────────────
+const NAV_NS = '{{PRODUCT_ID}}-navigator';
+const VERSION_KEY = NAV_NS + '-version';
+const VERSION_HISTORY_KEY = NAV_NS + '-version-history';
+const REVIEW_KEY = NAV_NS + '-review-status';
+const SIDEBAR_WIDTH_KEY = NAV_NS + '-sidebar-width';
+// 复制当前页面地址（供分享本地/局域网预览地址）
+const navStorage = window['localStorage'];
+
+function loadReviewStatus() {
+  try { return JSON.parse(navStorage.getItem(REVIEW_KEY) || '{}'); } catch { return {}; }
+}
+function saveReviewStatus() { navStorage.setItem(REVIEW_KEY, JSON.stringify(reviewStatus)); }
+
+function loadVersionHistory() {
+  try {
+    const history = JSON.parse(navStorage.getItem(VERSION_HISTORY_KEY) || '[]');
+    return Array.isArray(history) ? history.filter(Boolean).slice(0, 2) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveVersionHistory() {
+  navStorage.setItem(VERSION_HISTORY_KEY, JSON.stringify(versionHistory));
+}
+
+let reviewStatus = loadReviewStatus();
+let versionHistory = loadVersionHistory();
+let activeRow = null;
+
+// ─────────────────────────────────────────────
+//  Sidebar resize
+// ─────────────────────────────────────────────
+const SIDEBAR_MIN_WIDTH = 220;
+const SIDEBAR_MAX_WIDTH = 520;
+const SIDEBAR_DEFAULT_WIDTH = 290;
+
+function clampSidebarWidth(width) {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(width)));
+}
+
+function setSidebarWidth(width, persist) {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar) return;
+  const nextWidth = clampSidebarWidth(width);
+  sidebar.style.width = nextWidth + 'px';
+  if (persist) navStorage.setItem(SIDEBAR_WIDTH_KEY, String(nextWidth));
+}
+
+function initSidebarResize() {
+  const sidebar = document.querySelector('.sidebar');
+  const resizer = document.getElementById('sidebarResizer');
+  if (!sidebar || !resizer) return;
+  let resizing = false;
+
+  const savedWidth = parseInt(navStorage.getItem(SIDEBAR_WIDTH_KEY) || '', 10);
+  setSidebarWidth(Number.isFinite(savedWidth) ? savedWidth : SIDEBAR_DEFAULT_WIDTH, false);
+
+  function startResize(e, moveEvent, endEvent, cancelEvent) {
+    if (resizing || (e.button !== undefined && e.button !== 0)) return;
+    resizing = true;
+    e.preventDefault();
+    resizer.classList.add('is-resizing');
+    document.body.classList.add('is-resizing-sidebar');
+    if (e.pointerId !== undefined && resizer.setPointerCapture) resizer.setPointerCapture(e.pointerId);
+
+    const move = event => setSidebarWidth(event.clientX, false);
+    const stop = event => {
+      setSidebarWidth(sidebar.getBoundingClientRect().width, true);
+      resizing = false;
+      resizer.classList.remove('is-resizing');
+      document.body.classList.remove('is-resizing-sidebar');
+      if (event.pointerId !== undefined && resizer.releasePointerCapture) resizer.releasePointerCapture(event.pointerId);
+      document.removeEventListener(moveEvent, move);
+      document.removeEventListener(endEvent, stop);
+      if (cancelEvent) document.removeEventListener(cancelEvent, stop);
+    };
+
+    document.addEventListener(moveEvent, move);
+    document.addEventListener(endEvent, stop);
+    if (cancelEvent) document.addEventListener(cancelEvent, stop);
+  }
+
+  resizer.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse') return;
+    startResize(e, 'pointermove', 'pointerup', 'pointercancel');
+  });
+  resizer.addEventListener('mousedown', e => startResize(e, 'mousemove', 'mouseup'));
+}
+
+// ─────────────────────────────────────────────
+//  Version cache  (path → latest PRD version string)
+// ─────────────────────────────────────────────
+const VER_CACHE_KEY = NAV_NS + '-prd-versions';
+let versionCache = {};
+function loadVersionCache() { try { return JSON.parse(navStorage.getItem(VER_CACHE_KEY) || '{}'); } catch { return {}; } }
+function saveVersionCache() { navStorage.setItem(VER_CACHE_KEY, JSON.stringify(versionCache)); }
+versionCache = loadVersionCache();
+
+async function fetchPageVersion(htmlPath) {
+  const mdPath = htmlPath.replace(/\.html$/, '.md');
+  try {
+    const res = await fetch(mdPath, { cache: 'no-cache' });
+    if (!res.ok) return null;
+    const text = await res.text();
+    // find all version rows like "| V2.10.3 | ..." and take the last one
+    // strip inline HTML tags first so a highlighted version cell (e.g. <span style="color:...">V2.11.3</span>) still matches
+    const plainText = text.replace(/<[^>]+>/g, '');
+    const matches = [...plainText.matchAll(/^\|\s*(V[\d]+\.[\d.]+\w*)\s*\|/gm)];
+    return matches.length ? matches[matches.length - 1][1] : null;
+  } catch { return null; }
+}
+
+function applyVersionBadge(path, ver) {
+  const row = document.querySelector(`.file-row[data-path="${CSS.escape(path)}"]`);
+  if (!row) return;
+  const badge = row.querySelector('.version-badge');
+  if (!badge) return;
+  if (ver) {
+    badge.textContent = ver;
+    badge.classList.add('loaded');
+    row.dataset.prdVersion = ver;
+  }
+  refreshVersionMatch(row);
+}
+
+function refreshVersionMatch(row) {
+  const currentVer = (document.getElementById('versionInput').value || '').trim();
+  const prdVer = row.dataset.prdVersion || '';
+  const isMatch = currentVer && prdVer && fuzzyVersionMatch(prdVer, currentVer);
+  row.classList.toggle('version-match', isMatch);
+  const badge = row.querySelector('.version-badge');
+  if (badge) badge.classList.toggle('match', isMatch);
+}
+
+async function fetchAllVersions() {
+  // collect all file paths from tree
+  const paths = [];
+  function collect(nodes) { nodes.forEach(n => n.file ? paths.push(n.path) : collect(n.children || [])); }
+  collect(TREE);
+
+  // show cached values instantly, then always re-fetch for latest
+  paths.forEach(p => { if (versionCache[p]) applyVersionBadge(p, versionCache[p]); });
+
+  // always re-fetch all versions in batches of 8
+  for (let i = 0; i < paths.length; i += 8) {
+    const batch = paths.slice(i, i + 8);
+    await Promise.all(batch.map(async p => {
+      const ver = await fetchPageVersion(p);
+      versionCache[p] = ver || '';
+      applyVersionBadge(p, ver);
+    }));
+  }
+  saveVersionCache();
+  updateStats();
+}
+
+// ─────────────────────────────────────────────
+//  Icons
+// ─────────────────────────────────────────────
+const I_ARROW  = `<svg viewBox="0 0 10 10"><polygon points="2,2 8,5 2,8"/></svg>`;
+const I_FOLDER = `<svg viewBox="0 0 16 16"><path d="M1 3a1 1 0 011-1h4.586a1 1 0 01.707.293L8.414 3.5H14a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V3z"/></svg>`;
+const I_FILE   = `<svg viewBox="0 0 16 16"><path d="M4 1h6l4 4v9a1 1 0 01-1 1H3a1 1 0 01-1-1V2a1 1 0 011-1z"/><path fill="#fff" fill-opacity=".5" d="M10 1v4h4"/></svg>`;
+
+// ─────────────────────────────────────────────
+//  Breadcrumb path map  (path → "folder / folder")
+// ─────────────────────────────────────────────
+const breadcrumbMap = {};
+function buildBreadcrumbs(nodes, trail) {
+  nodes.forEach(n => {
+    if (n.file) {
+      breadcrumbMap[n.path] = trail ? trail + ' / ' + n.file : n.file;
+    } else {
+      buildBreadcrumbs(n.children || [], trail ? trail + ' / ' + n.name : n.name);
+    }
+  });
+}
+
+// ─────────────────────────────────────────────
+//  Preview
+// ─────────────────────────────────────────────
+function loadPreview(path, row) {
+  // deactivate previous
+  if (activeRow) activeRow.classList.remove('active');
+  activeRow = row;
+  row.classList.add('active');
+
+  const frame = document.getElementById('previewFrame');
+  const placeholder = document.getElementById('previewPlaceholder');
+  const bar = document.getElementById('previewBar');
+  const breadcrumb = document.getElementById('previewBreadcrumb');
+  const openBtn = document.getElementById('previewOpenBtn');
+
+  const url = path;
+  frame.src = url;
+  frame.style.display = 'block';
+  placeholder.style.display = 'none';
+  bar.style.display = 'flex';
+
+  const parts = (breadcrumbMap[path] || path).split(' / ');
+  const last = parts.pop();
+  const prefix = parts.join(' / ');
+  breadcrumb.innerHTML = prefix
+    ? `${prefix} / <b>${last}</b>`
+    : `<b>${last}</b>`;
+  openBtn.href = url;
+  window.dispatchEvent(new CustomEvent('pak-page-change', {
+    detail: {
+      htmlPath: decodeURIComponent(new URL(url, window.location.href).pathname),
+      title: last
+    }
+  }));
+}
+
+// ─────────────────────────────────────────────
+//  Review status helpers
+// ─────────────────────────────────────────────
+function isReviewed(path, type) {
+  return !!(reviewStatus[path] && reviewStatus[path][type]);
+}
+
+function renderReviewButton(path, type, label) {
+  const reviewed = isReviewed(path, type);
+  const text = reviewed ? '✓' : '−';
+  const title = label + (reviewed ? ' 已审核' : ' 未审核');
+  return `<button type="button" class="review-btn${reviewed ? ' is-reviewed' : ''}" data-review-target="${type}" title="${title}" aria-label="${title}" aria-pressed="${reviewed ? 'true' : 'false'}">${text}</button>`;
+}
+
+function refreshReviewButton(button, node) {
+  const type = button.getAttribute('data-review-target');
+  const label = type === 'html' ? 'HTML' : 'MD';
+  const reviewed = isReviewed(node.path, type);
+  const title = label + (reviewed ? ' 已审核' : ' 未审核');
+  button.classList.toggle('is-reviewed', reviewed);
+  button.textContent = reviewed ? '✓' : '−';
+  button.title = title;
+  button.setAttribute('aria-label', title);
+  button.setAttribute('aria-pressed', reviewed ? 'true' : 'false');
+}
+
+function toggleReviewStatus(row, node, type) {
+  const current = isReviewed(node.path, type);
+  const next = !current;
+  const state = reviewStatus[node.path] || {};
+  state[type] = next;
+  if (!state.html && !state.md) delete reviewStatus[node.path];
+  else reviewStatus[node.path] = state;
+  saveReviewStatus();
+  const button = row.querySelector(`.review-btn[data-review-target="${type}"]`);
+  if (button) refreshReviewButton(button, node);
+}
+
+// ─────────────────────────────────────────────
+//  Search helpers
+// ─────────────────────────────────────────────
+function normalizeSearchText(text) {
+  return String(text || '').toLowerCase().replace(/\s+/g, '');
+}
+
+function fuzzySearchMatch(text, keyword) {
+  const source = normalizeSearchText(text);
+  const target = normalizeSearchText(keyword);
+  if (!target) return true;
+  if (source.indexOf(target) !== -1) return true;
+
+  let index = 0;
+  for (const char of target) {
+    index = source.indexOf(char, index);
+    if (index === -1) return false;
+    index++;
+  }
+  return true;
+}
+
+function normalizeVersionSearchText(text) {
+  return normalizeSearchText(text).replace(/[._-]/g, '');
+}
+
+function fuzzyVersionMatch(version, keyword) {
+  const source = normalizeVersionSearchText(version);
+  const target = normalizeVersionSearchText(keyword);
+  if (!target) return true;
+  if (source.indexOf(target) !== -1) return true;
+
+  let index = 0;
+  for (const char of target) {
+    index = source.indexOf(char, index);
+    if (index === -1) return false;
+    index++;
+  }
+  return true;
+}
+
+function renderVersionHistory() {
+  const container = document.getElementById('versionHistory');
+  const clearButton = document.getElementById('clearVersionHistoryBtn');
+  const visibleHistory = versionHistory.slice(0, 2);
+  container.replaceChildren();
+
+  if (!visibleHistory.length) {
+    const emptyState = document.createElement('span');
+    emptyState.className = 'version-history-empty';
+    emptyState.textContent = '暂无历史';
+    container.appendChild(emptyState);
+    clearButton.hidden = true;
+    return;
+  }
+
+  clearButton.hidden = false;
+  visibleHistory.forEach(version => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'version-history-tag';
+    button.textContent = version;
+    button.title = `搜索版本 ${version}`;
+    button.setAttribute('aria-label', `搜索版本 ${version}`);
+    button.addEventListener('click', () => activateHistoryVersion(version));
+    container.appendChild(button);
+  });
+}
+
+function updateVersionHistory(version) {
+  versionHistory = [version, ...versionHistory]
+    .filter((item, index, list) => list.indexOf(item) === index)
+    .slice(0, 2);
+  saveVersionHistory();
+  renderVersionHistory();
+}
+
+function activateHistoryVersion(version) {
+  const input = document.getElementById('versionInput');
+  input.value = version;
+  navStorage.setItem(VERSION_KEY, version);
+  updateVersionHistory(version);
+  input.dispatchEvent(new Event('input'));
+}
+
+function submitVersionSearch() {
+  const nextVersion = document.getElementById('versionInput').value.trim();
+  const matchCount = document.querySelectorAll('.file-row.version-match').length;
+  if (!nextVersion) {
+    showToast('请输入版本号');
+    return;
+  }
+  if (!matchCount) {
+    showToast('未找到该版本页面');
+    return;
+  }
+
+  updateVersionHistory(nextVersion);
+  navStorage.setItem(VERSION_KEY, nextVersion);
+  showToast(`找到 ${matchCount} 个页面`);
+}
+
+function applyTitleSearch() {
+  const treeWrap = document.getElementById('sidebarTree');
+  const keyword = normalizeSearchText(document.getElementById('navSearchInput').value);
+  treeWrap.classList.toggle('is-searching', !!keyword);
+
+  treeWrap.querySelectorAll('.folder').forEach(folder => {
+    folder.classList.remove('search-hidden', 'search-match-folder');
+  });
+  treeWrap.querySelectorAll('.file-row').forEach(row => {
+    const matched = fuzzySearchMatch(row.dataset.searchText, keyword);
+    row.classList.toggle('search-hidden', !matched);
+  });
+
+  if (!keyword) return;
+
+  Array.from(treeWrap.querySelectorAll('.folder')).reverse().forEach(folder => {
+    const folderMatched = fuzzySearchMatch(folder.dataset.searchText, keyword);
+    const hasMatchedChild = !!folder.querySelector(':scope > .folder-children .file-row:not(.search-hidden), :scope > .folder-children .folder:not(.search-hidden)');
+    const visible = folderMatched || hasMatchedChild;
+    folder.classList.toggle('search-hidden', !visible);
+    folder.classList.toggle('search-match-folder', visible);
+    if (folderMatched) {
+      folder.querySelectorAll('.file-row, .folder').forEach(child => child.classList.remove('search-hidden'));
+    }
+  });
+}
+
+// ─────────────────────────────────────────────
+//  Render tree
+// ─────────────────────────────────────────────
+let totalCount = 0;
+
+function renderNodes(nodes, depth) {
+  const wrap = document.createElement('div');
+  wrap.style.paddingLeft = depth === 0 ? '0' : '14px';
+
+  nodes.forEach(node => {
+    if (node.file) {
+      totalCount++;
+
+      const row = document.createElement('div');
+      row.className = 'file-row';
+      row.dataset.path = node.path;
+      row.dataset.searchText = [node.file, node.path, breadcrumbMap[node.path] || ''].join(' ');
+      row.innerHTML = `
+        <div class="file-main">
+          <span class="file-icon">${I_FILE}</span>
+          <span class="file-name" title="${node.file}">${node.file}</span>
+          <span class="version-badge"></span>
+          <!-- review-btn:start (个人审核标记，本地开发专用；发布时可自动剥离) -->
+          ${renderReviewButton(node.path, 'html', 'HTML')}
+          ${renderReviewButton(node.path, 'md', 'MD')}
+          <!-- review-btn:end -->
+        </div>`;
+
+      // click row → preview
+      row.querySelector('.file-main').addEventListener('click', () => loadPreview(node.path, row));
+
+      row.querySelectorAll('.review-btn').forEach(button => {
+        button.addEventListener('click', e => {
+          e.stopPropagation();
+          toggleReviewStatus(row, node, button.getAttribute('data-review-target'));
+        });
+      });
+
+      wrap.appendChild(row);
+    } else {
+      const folder = document.createElement('div');
+      folder.className = 'folder';
+      folder.dataset.searchText = node.name;
+
+      const head = document.createElement('div');
+      head.className = 'folder-head';
+      head.innerHTML = `<span class="folder-arrow">${I_ARROW}</span><span class="folder-icon">${I_FOLDER}</span><span>${node.name}</span>`;
+      head.addEventListener('click', () => folder.classList.toggle('collapsed'));
+
+      folder.appendChild(head);
+      folder.appendChild(renderNodes(node.children || [], depth + 1));
+      folder.classList.add('folder-children-wrap');
+
+      // wrap children into .folder-children div for collapse
+      const childrenDiv = folder.lastChild;
+      childrenDiv.classList = '';
+      childrenDiv.className = 'folder-children';
+
+      wrap.appendChild(folder);
+    }
+  });
+  return wrap;
+}
+
+// ─────────────────────────────────────────────
+//  Stats
+// ─────────────────────────────────────────────
+function updateStats() {
+  const currentVer = (document.getElementById('versionInput').value || '').trim();
+  const matchCount = currentVer
+    ? document.querySelectorAll(`.file-row.version-match`).length
+    : 0;
+  document.getElementById('versionMatchCount').textContent = matchCount;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function copyText(text, successMsg) {
+  navigator.clipboard.writeText(text)
+    .then(() => showToast(successMsg))
+    .catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy'); ta.remove();
+      showToast(successMsg);
+    });
+}
+
+// ─────────────────────────────────────────────
+//  Init
+// ─────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  initSidebarResize();
+  try {
+    await loadTree();
+  } catch (e) {
+    document.getElementById('sidebarTree').textContent = '页面树加载失败：' + e.message;
+    return;
+  }
+  buildBreadcrumbs(TREE, '');
+
+  const savedVer = navStorage.getItem(VERSION_KEY);
+  if (savedVer) document.getElementById('versionInput').value = savedVer;
+  const versionInput = document.getElementById('versionInput');
+  renderVersionHistory();
+
+  versionInput.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    submitVersionSearch();
+  });
+  document.getElementById('versionSearchBtn').addEventListener('click', submitVersionSearch);
+  document.getElementById('clearVersionHistoryBtn').addEventListener('click', () => {
+    versionHistory = [];
+    saveVersionHistory();
+    renderVersionHistory();
+  });
+  document.getElementById('navSearchInput').addEventListener('input', applyTitleSearch);
+
+  const treeWrap = document.getElementById('sidebarTree');
+  treeWrap.appendChild(renderNodes(TREE, 0));
+  document.getElementById('totalCount').textContent = totalCount;
+  updateStats();
+
+  // version filter: re-evaluate all badges on input change
+  document.getElementById('versionInput').addEventListener('input', () => {
+    document.querySelectorAll('.file-row').forEach(row => refreshVersionMatch(row));
+    updateStats();
+    // keep filter active if checkbox is checked
+    if (document.getElementById('versionFilterToggle').checked) {
+      applyVersionFilter();
+    }
+  });
+
+  function applyVersionFilter() {
+    const active = document.getElementById('versionFilterToggle').checked;
+    treeWrap.classList.toggle('filter-by-version', active);
+  }
+  document.getElementById('versionFilterToggle').addEventListener('change', applyVersionFilter);
+
+  // fetch PRD versions in background
+  fetchAllVersions();
+
+  document.getElementById('expandAllBtn').addEventListener('click', () => {
+    treeWrap.querySelectorAll('.folder').forEach(f => f.classList.remove('collapsed'));
+  });
+  document.getElementById('collapseAllBtn').addEventListener('click', () => {
+    treeWrap.querySelectorAll('.folder').forEach(f => f.classList.add('collapsed'));
+  });
+  document.getElementById('copyAddressBtn').addEventListener('click', () => {
+    copyText(window.location.href, '本页地址已复制到剪贴板');
+  });
+
+});
+</script>
+<!-- agent-panel:start (本地开发专用；发布时可由 prototype-agent publish 自动剥离) -->
+<aside class="agent-panel" id="agentPanel" aria-label="OpenCode Agent"></aside>
+<script>window.PROTO_KIT = { productId: '{{PRODUCT_ID}}', productTitle: '{{PRODUCT_TITLE}}' };</script>
+<script src="/_kit/shell/agent-panel.js"></script>
+<!-- agent-panel:end -->
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "port": 8082,
+  "opencode": {
+    "bin": "auto",
+    "model": "deepseek/deepseek-v4-flash",
+    "agent": "build",
+    "host": "127.0.0.1",
+    "port": 4097
+  },
+  "products": [
+    { "id": "demo", "roots": ["pc"] }
+  ]
+}

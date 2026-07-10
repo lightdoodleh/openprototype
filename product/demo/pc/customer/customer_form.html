@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客户表单 - Demo</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  font-size: 13px; color: #20242d; background: #f3f5f8; padding: 20px;
+}
+.page-title { font-size: 18px; font-weight: 600; margin: 0 0 16px; }
+.panel { background: #fff; border: 1px solid #e6ebf2; border-radius: 8px; padding: 20px; }
+.form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.form-item { display: flex; flex-direction: column; gap: 6px; }
+.form-item.span-3 { grid-column: 1 / -1; }
+.form-item label { font-size: 12px; color: #6b7482; }
+.form-item .req::before { content: '*'; color: #e53935; margin-right: 2px; }
+.form-item input, .form-item select, .form-item textarea {
+  min-height: 32px; padding: 6px 10px; border: 1px solid #dfe5ee; border-radius: 6px; font-size: 13px; outline: none; width: 100%;
+}
+.form-item input:focus, .form-item select:focus, .form-item textarea:focus { border-color: #1677ff; }
+.readonly-text { min-height: 32px; padding: 6px 0; color: #20242d; }
+.footer { display: flex; gap: 10px; margin-top: 24px; }
+.btn { height: 34px; padding: 0 20px; border-radius: 6px; font-size: 13px; cursor: pointer; border: 1px solid #dfe5ee; background: #fff; color: #4f5665; }
+.btn-primary { background: #1677ff; border-color: #1677ff; color: #fff; }
+.btn-primary:hover { background: #0d5edb; }
+</style>
+</head>
+<body>
+<h1 class="page-title" id="pageTitle">新增客户</h1>
+
+<div class="panel">
+  <div class="form-grid">
+    <div class="form-item">
+      <label class="req">客户名称</label>
+      <input id="fName" type="text" placeholder="请输入">
+      <div class="readonly-text" id="vName" style="display:none"></div>
+    </div>
+    <div class="form-item">
+      <label class="req">联系人</label>
+      <input id="fContact" type="text" placeholder="请输入">
+      <div class="readonly-text" id="vContact" style="display:none"></div>
+    </div>
+    <div class="form-item">
+      <label>联系电话</label>
+      <input id="fPhone" type="text" placeholder="请输入">
+      <div class="readonly-text" id="vPhone" style="display:none"></div>
+    </div>
+    <div class="form-item">
+      <label>客户等级</label>
+      <select id="fLevel">
+        <option value="A">A 类</option>
+        <option value="B">B 类</option>
+        <option value="C">C 类</option>
+      </select>
+      <div class="readonly-text" id="vLevel" style="display:none"></div>
+    </div>
+    <div class="form-item">
+      <label>状态</label>
+      <select id="fStatus">
+        <option value="active">启用</option>
+        <option value="disabled">停用</option>
+      </select>
+      <div class="readonly-text" id="vStatus" style="display:none"></div>
+    </div>
+    <div class="form-item span-3">
+      <label>备注</label>
+      <textarea id="fRemark" rows="3" placeholder="请输入"></textarea>
+      <div class="readonly-text" id="vRemark" style="display:none"></div>
+    </div>
+  </div>
+
+  <div class="footer" id="footer">
+    <button class="btn btn-primary" id="btnSave">保存</button>
+  </div>
+</div>
+
+<script src="/_kit/shared/base-manager.js"></script>
+<script src="/product/demo/pc/demo-data.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+const mode = params.get('mode');
+const id = params.get('id');
+const isView = mode === 'view';
+
+const fields = ['Name', 'Contact', 'Phone', 'Level', 'Status', 'Remark'];
+const keyMap = { Name: 'name', Contact: 'contact', Phone: 'phone', Level: 'level', Status: 'status', Remark: 'remark' };
+const labelMap = { Level: DEMO_LEVEL_LABELS, Status: DEMO_STATUS_LABELS };
+
+if (id) {
+  const item = demoCustomerManager.getItemById(id) || {};
+  fields.forEach(f => {
+    const el = document.getElementById('f' + f);
+    if (el) el.value = item[keyMap[f]] || (f === 'Level' ? 'A' : f === 'Status' ? 'active' : '');
+  });
+  document.getElementById('pageTitle').textContent = isView ? '查看客户' : '编辑客户';
+}
+
+// 红线 4：mode=view 物理隐藏所有输入控件与提交按钮，改显示只读文本
+if (isView) {
+  fields.forEach(f => {
+    const input = document.getElementById('f' + f);
+    const view = document.getElementById('v' + f);
+    if (input) input.style.display = 'none';
+    if (view) {
+      let val = input ? input.value : '';
+      if (labelMap[f]) val = labelMap[f][val] || val;
+      view.textContent = val || '-';
+      view.style.display = 'block';
+    }
+  });
+  document.getElementById('footer').style.display = 'none';
+}
+
+document.getElementById('btnSave').addEventListener('click', () => {
+  const item = {
+    id: id || demoCustomerManager.getNextId(),
+    name: document.getElementById('fName').value.trim(),
+    contact: document.getElementById('fContact').value.trim(),
+    phone: document.getElementById('fPhone').value.trim(),
+    level: document.getElementById('fLevel').value,
+    status: document.getElementById('fStatus').value,
+    remark: document.getElementById('fRemark').value.trim()
+  };
+  if (!item.name) { alert('请填写客户名称'); return; }
+  demoCustomerManager.saveItem(item);
+  window.location.href = 'customer_list.html';
+});
+</script>
+</body>
+</html>

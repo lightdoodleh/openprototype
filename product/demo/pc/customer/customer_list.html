@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客户列表 - Demo</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  font-size: 13px; color: #20242d; background: #f3f5f8; padding: 20px;
+}
+.page-title { font-size: 18px; font-weight: 600; margin: 0 0 16px; }
+.panel { background: #fff; border: 1px solid #e6ebf2; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+.search-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.form-item { display: flex; flex-direction: column; gap: 4px; }
+.form-item label { font-size: 12px; color: #6b7482; }
+.form-item input, .form-item select {
+  height: 32px; min-width: 180px; padding: 0 10px; border: 1px solid #dfe5ee; border-radius: 6px; font-size: 13px; outline: none;
+}
+.form-item input:focus, .form-item select:focus { border-color: #1677ff; }
+.search-actions { display: flex; gap: 8px; margin-left: auto; }
+.btn { height: 32px; padding: 0 16px; border-radius: 6px; font-size: 13px; cursor: pointer; border: 1px solid #dfe5ee; background: #fff; color: #4f5665; }
+.btn:hover { background: #f0f5ff; color: #1677ff; border-color: #bfdbff; }
+.btn-primary { background: #1677ff; border-color: #1677ff; color: #fff; }
+.btn-primary:hover { background: #0d5edb; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eef1f6; font-size: 13px; }
+th { color: #6b7482; font-weight: 600; background: #fafbfc; }
+tr:hover td { background: #f7faff; }
+.tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; }
+.tag-active { background: #e9faea; color: #0f9f31; }
+.tag-disabled { background: #f3f4f6; color: #8a94a6; }
+.link { color: #1677ff; cursor: pointer; }
+.link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1 class="page-title">客户列表</h1>
+
+<div class="panel">
+  <div class="search-form">
+    <div class="form-item">
+      <label>客户名称</label>
+      <input id="kwName" type="text" placeholder="请输入客户名称">
+    </div>
+    <div class="form-item">
+      <label>状态</label>
+      <select id="kwStatus">
+        <option value="">全部</option>
+        <option value="active">启用</option>
+        <option value="disabled">停用</option>
+      </select>
+    </div>
+    <div class="search-actions">
+      <button class="btn btn-primary" id="btnSearch">查询</button>
+      <button class="btn" id="btnReset">重置</button>
+      <button class="btn btn-primary" id="btnAdd">新增</button>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <table>
+    <thead>
+      <tr><th>编号</th><th>客户名称</th><th>联系人</th><th>联系电话</th><th>等级</th><th>状态</th><th>操作</th></tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<script src="/_kit/shared/base-manager.js"></script>
+<script src="/product/demo/pc/demo-data.js"></script>
+<script>
+function render(rows) {
+  const tbody = document.getElementById('tbody');
+  tbody.replaceChildren();
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="7" style="text-align:center;color:#a8b2c3;padding:24px">暂无数据</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+  rows.forEach(row => {
+    const tr = document.createElement('tr');
+    const statusTag = row.status === 'active'
+      ? '<span class="tag tag-active">' + DEMO_STATUS_LABELS.active + '</span>'
+      : '<span class="tag tag-disabled">' + DEMO_STATUS_LABELS.disabled + '</span>';
+    tr.innerHTML =
+      '<td>' + row.id + '</td>' +
+      '<td>' + row.name + '</td>' +
+      '<td>' + row.contact + '</td>' +
+      '<td>' + row.phone + '</td>' +
+      '<td>' + (DEMO_LEVEL_LABELS[row.level] || row.level) + '</td>' +
+      '<td>' + statusTag + '</td>' +
+      '<td><span class="link" data-id="' + row.id + '">编辑</span></td>';
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('.link').forEach(el => {
+    el.addEventListener('click', () => {
+      window.location.href = 'customer_form.html?mode=view&id=' + el.getAttribute('data-id');
+    });
+  });
+}
+
+function doSearch() {
+  const criteria = {};
+  const status = document.getElementById('kwStatus').value;
+  if (status) criteria.status = status;
+  let rows = demoCustomerManager.filter(criteria);
+  const kw = document.getElementById('kwName').value.trim();
+  if (kw) rows = rows.filter(r => r.name.includes(kw));
+  render(rows);
+}
+
+document.getElementById('btnSearch').addEventListener('click', doSearch);
+document.getElementById('btnReset').addEventListener('click', () => {
+  document.getElementById('kwName').value = '';
+  document.getElementById('kwStatus').value = '';
+  doSearch();
+});
+document.getElementById('btnAdd').addEventListener('click', () => {
+  window.location.href = 'customer_form.html';
+});
+render(demoCustomerManager.getData());
+</script>
+</body>
+</html>
