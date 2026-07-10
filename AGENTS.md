@@ -1,7 +1,7 @@
 # AGENTS.md — AI 协作上下文
 
 > 任何 AI 工具（Claude Code / Cursor / Codex / OpenCode 等）在这个仓库工作时，先读这份文件，再做事。
-> 这是 prototype-agent-kit 的通用模板，请按你的团队/产品把 `{产品ID}`、术语、示例替换成自己的。
+> 这是 prototype-agent-kit 的通用模板，请按你的团队/产品补充自己的规范。
 
 ---
 
@@ -13,63 +13,46 @@
 业务方原话 → 结构化 → PRD / 原型 (HTML/JS) → 浏览器调试 → 交付前对齐文档与原型
 ```
 
-**核心要求：PRD 与原型最终一致**。顺序可灵活（先 PRD 后原型，或先页面后补 PRD），但交付前必须一致。
+**核心要求：PRD 与原型最终一致**。顺序可灵活（先 PRD 后原型，或先页面后补 PRD），但交付前必须一致；任何字段或规则改动，都要同步影响到相关 PRD、页面代码和 mock 数据。
 
 **你的输出**：PRD `.md`、HTML/JS 原型、mock 数据。
 **你不输出**：后端代码、数据库 schema、单元测试。
 
-**事实边界（每个事实只有一个家）**：
-| 事实 | 唯一的家 |
-|------|---------|
-| 某页字段定义（必填/只读/规则/枚举） | 该页 PRD 字段表 |
-| 共享枚举 / 状态文案 | `product/{产品ID}/shared/constants/` |
-| 术语表 | `product/{产品ID}/knowledge-base/glossary.csv` |
+---
+
+## 二、原型页面必须遵守的约定
+
+页面的**硬性红线**（脚本顺序、BaseDataManager、状态常量化、字体栈、`?mode=view` 物理隐藏等）
+写在 **[CONVENTIONS.md](./CONVENTIONS.md)**，由 `prototype-agent check` 自动强制。
+**生成或修改任何原型页面后，立即跑 `prototype-agent check --changed`，把 ERROR 全部修掉再交付。**
 
 ---
 
-## 二、铁律
+## 三、你的团队规范（自行补充）
 
-### 2.1 PRD 与原型必须同步
-任何字段或规则改动，都要同步影响到相关 PRD、页面代码和 mock 数据。
+本模板只带最小通用约定。把你团队自己的东西放进对应目录，并在下面登记，让 AI 先读再做：
 
-### 2.2 引用规范，不要凭记忆写
-涉及 UI、数据、PRD 章节、字段命名，**必须先 Read 对应规范文件**再生成。
+| 你要做 | 先读（你自己补） |
+|--------|------------------|
+| 列表 / 表单 / 详情 / 审批 PRD | `rules/*-page-prd-template.md`（自建） |
+| UI 组件 / 业务逻辑规范 | `rules/*.md`（自建） |
+| 术语 | `product/{产品ID}/knowledge-base/glossary.csv`（自建） |
 
-| 你要做 | 必须先读 |
-|--------|---------|
-| 任何代码生成 | `rules/project_rules.md` |
-| 任何 UI 组件 | `rules/ui-component-standards.md` |
-| 任何业务逻辑 | `rules/business-logic-standards.md` |
-| 列表 / 表单 / 详情 / 审批 / 导入 PRD | `rules/*-page-prd-template.md` |
-| 改字段 | `rules/field-change-impact-handling.md` |
-| 修 bug | `rules/bug-prevention-standards.md` |
-| 起 web 服务 | `rules/web-server-standards.md` |
-
-### 2.3 七条 UI/数据红线
-1. **零内联**：HTML 只放容器；按钮/下拉/操作列经 `shared/common.js` 的 Renderer 渲染。
-2. **数据走 BaseDataManager**：禁止页面级 `localStorage.getItem/setItem`。
-3. **状态值常量化**：状态文案从 `STATUS_LABELS` 取（`shared/constants/status.js`），禁止写死。
-4. **`mode=view` 物理隐藏**：URL 带 `?mode=view` 时输入/删除/编辑按钮 `display:none`，不是 `disabled`。
-5. **字体系统栈**：`-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif`。禁止 Google Fonts。
-6. **栅格规则**：表单上下布局，Label 在控件上方左对齐；普通项三栏栅格，textarea 占满一行。
-7. **按钮聚拢**：查询区「查询/重置/新增」左对齐放在同一个 `.search-actions`，由 SearchRenderer 统一渲染。
-
-### 2.4 脚本加载顺序
-`base-manager.js → constants.js → mock-data.js → data.js → common.js → menu.js → prd-content.js → page.js`
-
-### 2.5 生成后必跑自动化检查
-任何 HTML/JS 原型生成或修改后立即运行 `npm run check:changed`，把 ❌ ERROR 全部修掉再交付。
+> 事实边界：字段定义归该页 PRD 字段表；共享枚举/状态文案归 `product/{产品ID}/shared/constants/`；
+> 别新建与 PRD 字段表或 constants 重复的层。
 
 ---
 
-## 三、PRD 字段约定
-- **修订人**：填你的名字或团队约定值。
-- **修订日期**：当天日期，YYYY-MM-DD。
+## 四、PRD 字段约定
+- **修订人 / 修订日期**：按团队约定填。
 - **版本号**：由人填写，AI 不写、不改、不递增、不推断。
 
+## 五、回复风格
+- 代码注释能少则少，命名清晰即可。
+- 简短、可执行、有验收点。
+- 不写 README/总结，除非明确要求。
+
 ---
 
-## 四、回复风格
-- 代码注释能少则少，命名清晰即可。
-- 不写 README/文档，除非明确要求。
-- 简短、可执行、有验收点。
+*想让 AI 更懂你的产品：把 PRD 模板、UI 规范、术语放进 `rules/` 和 `product/{id}/`，
+在上面第三节登记即可——这些内容归你，不随框架升级被覆盖。*

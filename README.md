@@ -75,8 +75,10 @@ npx prototype-agent doctor
 ```
 你的项目/
   proto-kit.config.json      # 端口 / OpenCode / 产品列表（唯一配置入口）
-  AGENTS.md                  # 给 AI 的协作规范（你拥有，可改）
-  rules/ prompts/ workflow/  # 规范与提示词模板（你拥有，可改）
+  AGENTS.md                  # 给 AI 的协作规范（通用模板，你拥有可改）
+  CONVENTIONS.md             # 检查器强制的页面红线说明（和运行时耦合）
+  skills/                    # xiaojia（编码克制）+ auto-test（改完自动跑检查）
+  rules/                     # 空目录，放你团队自己的 PRD 模板 / UI 规范
   product/<id>/pc/
     index.html               # 导航壳（薄，引用 /_kit 运行时）
     nav-tree.json            # 页面清单（nav:sync 自动生成）
@@ -88,7 +90,7 @@ npx prototype-agent doctor
 | 层 | 内容 | 归属 | 更新 |
 |----|------|------|------|
 | **运行时** | 服务器 / shared 引擎 / Agent 面板 / 检查脚本 | npm 包内（挂在 `/_kit/`） | `npm update` |
-| **可编辑资产** | `rules/` `prompts/` `workflow/` `AGENTS.md` | 你拥有 | `prototype-agent update` 对比后按需合并 |
+| **可编辑资产** | `AGENTS.md` `CONVENTIONS.md` `skills/` + 你自建的 `rules/` | 你拥有 | `prototype-agent update` 对比后按需合并 |
 | **业务内容** | 你的产品 PRD / 原型 / 数据 | 你拥有 | 你自己维护 |
 
 ---
@@ -119,7 +121,10 @@ npx prototype-agent doctor
 
 - **运行时**（服务器 / 引擎 / Agent 面板 / 检查）随包升级：`npm update prototype-agent-kit`。
 - **可编辑资产** 由你拥有，不会被自动覆盖；想同步最新模板时对比
-  `node_modules/prototype-agent-kit/templates/docs/` 后按需合并（建议先 git commit 再 diff）。
+  `node_modules/prototype-agent-kit/templates/`（AGENTS.md / CONVENTIONS.md / skills）后按需合并（建议先 git commit 再 diff）。
+
+> 说明：本框架只带**最小通用规范**（页面红线 + 编码克制）。PRD 模板、UI 组件规范、
+> 业务术语这类**方法论**属于你自己，放进 `rules/` 与 `product/<id>/`，不随框架分发。
 
 ---
 

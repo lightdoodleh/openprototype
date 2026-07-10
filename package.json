@@ -31,6 +31,7 @@
     "product/demo/",
     "proto-kit.config.json",
     "AGENTS.md",
+    "CONVENTIONS.md",
     "README.md"
   ],
   "devDependencies": {

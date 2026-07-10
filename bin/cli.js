@@ -22,6 +22,19 @@ const { detectOpenCodeBin, CONFIG_FILENAME, DEFAULTS } = require('../lib/config'
 const PKG_ROOT = path.resolve(__dirname, '..');
 const TPL = path.join(PKG_ROOT, 'templates');
 
+const RULES_README = `# rules/ — 你团队自己的规范
+
+这个目录留给你放**自己**的产品规范，框架不预置、也不会覆盖它们：
+
+- \`*-page-prd-template.md\` — 你的列表/表单/详情/审批 PRD 模板
+- UI 组件规范、业务逻辑规范、术语约定……
+
+放进来后，在项目根的 \`AGENTS.md\` 第三节登记，AI 就会先读再做。
+
+> 页面的硬性红线（脚本顺序、BaseDataManager、状态常量化、字体栈、mode=view 物理隐藏）
+> 由框架的 \`CONVENTIONS.md\` + \`prototype-agent check\` 管，不需要你重写。
+`;
+
 // ── 小工具 ──────────────────────────────────────────────
 const C = {
   g: (s) => `\x1b[32m${s}\x1b[0m`,
@@ -92,17 +105,16 @@ function cmdCreate(argv) {
 
   info(C.b(`\n在 ${dir}/ 创建新项目…\n`));
 
-  // 可编辑资产（用户拥有、可定制）
-  copyDir(path.join(TPL, 'docs', 'rules'), path.join(root, 'rules'));
-  copyDir(path.join(TPL, 'docs', 'prompts'), path.join(root, 'prompts'));
-  copyDir(path.join(TPL, 'docs', 'workflow'), path.join(root, 'workflow'));
-  copyDir(path.join(TPL, 'docs', 'skills'), path.join(root, 'skills'));
-  ok('写入 rules/ prompts/ workflow/ skills/');
-
+  // 可编辑资产（用户拥有、可定制）：只带最小通用层
+  copyDir(path.join(TPL, 'skills'), path.join(root, 'skills'));
   fs.copyFileSync(path.join(TPL, 'AGENTS.md'), path.join(root, 'AGENTS.md'));
+  fs.copyFileSync(path.join(TPL, 'CONVENTIONS.md'), path.join(root, 'CONVENTIONS.md'));
   fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# Claude Code Context\n\n@AGENTS.md\n');
   fs.copyFileSync(path.join(TPL, 'gitignore'), path.join(root, '.gitignore'));
-  ok('写入 AGENTS.md / CLAUDE.md / .gitignore');
+  // 留一个空 rules/ 让你放自己团队的 PRD 模板 / UI 规范
+  fs.mkdirSync(path.join(root, 'rules'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'rules', 'README.md'), RULES_README);
+  ok('写入 AGENTS.md / CONVENTIONS.md / CLAUDE.md / skills/ / rules/（空）');
 
   saveConfig(root, JSON.parse(JSON.stringify(DEFAULTS)));
   ok('写入 ' + CONFIG_FILENAME);
@@ -138,11 +150,9 @@ function cmdInit() {
   const root = process.cwd();
   info(C.b('\n把 prototype-agent-kit 植入当前项目（非破坏式）…\n'));
 
-  copyIfAbsent(path.join(TPL, 'docs', 'rules'), path.join(root, 'rules'));
-  copyIfAbsent(path.join(TPL, 'docs', 'prompts'), path.join(root, 'prompts'));
-  copyIfAbsent(path.join(TPL, 'docs', 'workflow'), path.join(root, 'workflow'));
-  copyIfAbsent(path.join(TPL, 'docs', 'skills'), path.join(root, 'skills'));
+  copyIfAbsent(path.join(TPL, 'skills'), path.join(root, 'skills'));
   copyIfAbsent(path.join(TPL, 'AGENTS.md'), path.join(root, 'AGENTS.md'));
+  copyIfAbsent(path.join(TPL, 'CONVENTIONS.md'), path.join(root, 'CONVENTIONS.md'));
   if (!fs.existsSync(path.join(root, CONFIG_FILENAME))) {
     saveConfig(root, JSON.parse(JSON.stringify(DEFAULTS)));
     ok('写入 ' + CONFIG_FILENAME);
@@ -237,7 +247,7 @@ function cmdUpdate() {
   info(C.g('  npm update prototype-agent-kit\n'));
   info('可编辑资产（rules / prompts / workflow / AGENTS.md）由你拥有，不会被自动覆盖。');
   info('想同步最新模板时，对比这些目录后按需合并：');
-  info(C.dim('  node_modules/prototype-agent-kit/templates/docs/  →  你项目里的 rules/ prompts/ workflow/'));
+  info(C.dim('  node_modules/prototype-agent-kit/templates/  →  你项目里的 AGENTS.md / CONVENTIONS.md / skills/'));
   info(C.dim('  （建议先 git commit，再用 diff 工具挑选要更新的内容，保护你的本地改动）\n'));
 }
 
