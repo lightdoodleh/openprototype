@@ -18,10 +18,21 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { loadConfig } = require('../lib/config');
 
-const CONFIG = loadConfig();
+function resolvePortArg(fallback) {
+  const i = process.argv.indexOf('--port');
+  if (i !== -1 && process.argv[i + 1]) return Number(process.argv[i + 1]);
+  return fallback;
+}
+
+let CONFIG = loadConfig();
+// 当前目录没有 proto-kit.config.json 时（例如直接跑本包自带 demo），回退用本包自己的配置
+if (!CONFIG.hasConfigFile) {
+  const pkgConfig = loadConfig(__dirname);
+  if (pkgConfig.hasConfigFile) CONFIG = pkgConfig;
+}
 const ROOT_DIR = CONFIG.rootDir;
 const KIT_RUNTIME_DIR = __dirname;           // 本包 runtime/ 目录（可能位于 node_modules 内）
-const PORT = CONFIG.port;
+const PORT = resolvePortArg(CONFIG.port);
 const PRODUCT_ROOT = path.resolve(ROOT_DIR, 'product');
 const AGENT_WRITE_ROOTS = CONFIG.productRoots.map((r) => r.dir); // Agent 只能写这些产品目录
 const IS_WIN = process.platform === 'win32';
