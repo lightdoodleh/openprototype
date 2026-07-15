@@ -1,6 +1,6 @@
 {
-  "name": "prototype-agent-kit",
-  "version": "0.1.0",
+  "name": "openprototype",
+  "version": "0.2.0",
   "description": "本地原型工作台：左侧树形导航 + 中间原型预览 + 右侧 AI Agent（OpenCode）。PRD 与 HTML/JS 原型协作，含自动化检查。",
   "keywords": [
     "prototype",
@@ -14,15 +14,15 @@
   "author": "lightdoodleh",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lightdoodleh/prototype-agent-kit.git"
+    "url": "git+https://github.com/lightdoodleh/openprototype.git"
   },
-  "homepage": "https://github.com/lightdoodleh/prototype-agent-kit#readme",
-  "bugs": "https://github.com/lightdoodleh/prototype-agent-kit/issues",
+  "homepage": "https://github.com/lightdoodleh/openprototype#readme",
+  "bugs": "https://github.com/lightdoodleh/openprototype/issues",
   "engines": {
     "node": ">=16"
   },
   "bin": {
-    "prototype-agent": "bin/cli.js"
+    "openprototype": "bin/cli.js"
   },
   "main": "runtime/server.js",
   "scripts": {

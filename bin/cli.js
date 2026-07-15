@@ -2,16 +2,16 @@
 'use strict';
 
 /**
- * prototype-agent CLI
+ * openprototype CLI
  *
- *   prototype-agent create <dir>          从零创建一个新项目（场景①）
- *   prototype-agent init                  把框架植入当前已有项目（场景②，非破坏式）
- *   prototype-agent add-product <id>      新增一个产品壳（默认 pc）
- *   prototype-agent serve                 启动本地服务器
- *   prototype-agent check [--changed]     跑自动化检查
- *   prototype-agent nav:sync              重建各产品 nav-tree.json
- *   prototype-agent doctor                体检：Node / OpenCode / 配置 / Playwright
- *   prototype-agent update                提示如何更新框架（运行时随 npm，可编辑资产按需覆盖）
+ *   openprototype create <dir>          从零创建一个新项目（场景①）
+ *   openprototype init                  把框架植入当前已有项目（场景②，非破坏式）
+ *   openprototype add-product <id>      新增一个产品壳（默认 pc）
+ *   openprototype serve                 启动本地服务器
+ *   openprototype check [--changed]     跑自动化检查
+ *   openprototype nav:sync              重建各产品 nav-tree.json
+ *   openprototype doctor                体检：Node / OpenCode / 配置 / Playwright
+ *   openprototype update                提示如何更新框架（运行时随 npm，可编辑资产按需覆盖）
  */
 
 const fs = require('fs');
@@ -32,7 +32,7 @@ const RULES_README = `# rules/ — 你团队自己的规范
 放进来后，在项目根的 \`AGENTS.md\` 第三节登记，AI 就会先读再做。
 
 > 页面的硬性红线（脚本顺序、BaseDataManager、状态常量化、字体栈、mode=view 物理隐藏）
-> 由框架的 \`CONVENTIONS.md\` + \`prototype-agent check\` 管，不需要你重写。
+> 由框架的 \`CONVENTIONS.md\` + \`openprototype check\` 管，不需要你重写。
 `;
 
 // ── 小工具 ──────────────────────────────────────────────
@@ -104,7 +104,7 @@ function saveConfig(projectRoot, config) {
 // ── 命令：create ────────────────────────────────────────
 function cmdCreate(argv) {
   const dir = argv[0];
-  if (!dir) die('用法：prototype-agent create <目录名>');
+  if (!dir) die('用法：openprototype create <目录名>');
   const root = path.resolve(process.cwd(), dir);
   if (fs.existsSync(root) && fs.readdirSync(root).length) die(`目录 ${dir} 已存在且非空`);
   fs.mkdirSync(root, { recursive: true });
@@ -130,12 +130,12 @@ function cmdCreate(argv) {
     private: true,
     version: '0.1.0',
     scripts: {
-      serve: 'prototype-agent serve',
-      check: 'prototype-agent check',
-      'check:changed': 'prototype-agent check --changed',
-      'nav:sync': 'prototype-agent nav:sync'
+      serve: 'openprototype serve',
+      check: 'openprototype check',
+      'check:changed': 'openprototype check --changed',
+      'nav:sync': 'openprototype nav:sync'
     },
-    dependencies: { 'prototype-agent-kit': kitDependencySpec() }
+    dependencies: { 'openprototype': kitDependencySpec() }
   };
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
   ok('写入 package.json');
@@ -148,13 +148,13 @@ function cmdCreate(argv) {
   info(`  cd ${dir}`);
   info('  npm install');
   info('  npm run serve      ' + C.dim('# 打开 http://127.0.0.1:8082/product/demo/pc/index.html'));
-  info('\n  ' + C.dim('（右侧 AI 面板需要本机安装 OpenCode，npm install 后运行 npx prototype-agent doctor 检查）\n'));
+  info('\n  ' + C.dim('（右侧 AI 面板需要本机安装 OpenCode，npm install 后运行 npx openprototype doctor 检查）\n'));
 }
 
 // ── 命令：init（植入已有项目） ──────────────────────────
 function cmdInit() {
   const root = process.cwd();
-  info(C.b('\n把 prototype-agent-kit 植入当前项目（非破坏式）…\n'));
+  info(C.b('\n把 openprototype 植入当前项目（非破坏式）…\n'));
 
   copyIfAbsent(path.join(TPL, 'skills'), path.join(root, 'skills'));
   copyIfAbsent(path.join(TPL, 'AGENTS.md'), path.join(root, 'AGENTS.md'));
@@ -170,10 +170,10 @@ function cmdInit() {
     const pkg = readJson(pkgPath, {});
     pkg.scripts = pkg.scripts || {};
     const want = {
-      serve: 'prototype-agent serve',
-      check: 'prototype-agent check',
-      'check:changed': 'prototype-agent check --changed',
-      'nav:sync': 'prototype-agent nav:sync'
+      serve: 'openprototype serve',
+      check: 'openprototype check',
+      'check:changed': 'openprototype check --changed',
+      'nav:sync': 'openprototype nav:sync'
     };
     let added = 0;
     for (const [k, v] of Object.entries(want)) {
@@ -186,13 +186,13 @@ function cmdInit() {
     info(C.y('  未发现 package.json，跳过脚本合并（可手动 npm init）'));
   }
 
-  info(C.g('\n✔ 已植入。运行 `npx prototype-agent add-product <id>` 建第一个产品壳。\n'));
+  info(C.g('\n✔ 已植入。运行 `npx openprototype add-product <id>` 建第一个产品壳。\n'));
 }
 
 // ── 命令：add-product ───────────────────────────────────
 function cmdAddProduct(argv) {
   const id = (argv[0] || '').trim();
-  if (!id || !/^[a-z0-9-]+$/.test(id)) die('用法：prototype-agent add-product <id>（id 只能小写字母/数字/连字符）');
+  if (!id || !/^[a-z0-9-]+$/.test(id)) die('用法：openprototype add-product <id>（id 只能小写字母/数字/连字符）');
   const surface = argv.includes('--h5') ? 'h5' : 'pc';
   if (surface === 'h5') die('H5 端暂未支持，敬请期待（当前仅 PC）。');
   const title = (argv.find((a, i) => a === '--title' && argv[i + 1]) ? argv[argv.indexOf('--title') + 1] : id);
@@ -220,7 +220,7 @@ function runNode(scriptRel, extraArgs) {
 
 // ── 命令：doctor ────────────────────────────────────────
 function cmdDoctor() {
-  info(C.b('\nprototype-agent 体检\n'));
+  info(C.b('\nopenprototype 体检\n'));
   let warn = 0;
 
   const nodeMajor = Number(process.versions.node.split('.')[0]);
@@ -248,29 +248,29 @@ function cmdDoctor() {
 
 // ── 命令：update ────────────────────────────────────────
 function cmdUpdate() {
-  info(C.b('\n更新 prototype-agent-kit\n'));
+  info(C.b('\n更新 openprototype\n'));
   info('运行时（服务器 / shared 引擎 / Agent 面板 / 检查脚本）随包升级：');
-  info(C.g('  npm update prototype-agent-kit\n'));
+  info(C.g('  npm update openprototype\n'));
   info('可编辑资产（rules / prompts / workflow / AGENTS.md）由你拥有，不会被自动覆盖。');
   info('想同步最新模板时，对比这些目录后按需合并：');
-  info(C.dim('  node_modules/prototype-agent-kit/templates/  →  你项目里的 AGENTS.md / CONVENTIONS.md / skills/'));
+  info(C.dim('  node_modules/openprototype/templates/  →  你项目里的 AGENTS.md / CONVENTIONS.md / skills/'));
   info(C.dim('  （建议先 git commit，再用 diff 工具挑选要更新的内容，保护你的本地改动）\n'));
 }
 
 // ── 入口 ────────────────────────────────────────────────
 function help() {
   info(`
-${C.b('prototype-agent')} — 本地原型工作台脚手架
+${C.b('openprototype')} — 本地原型工作台脚手架
 
 用法：
-  ${C.g('prototype-agent create <dir>')}       从零创建新项目
-  ${C.g('prototype-agent init')}               把框架植入当前已有项目（非破坏式）
-  ${C.g('prototype-agent add-product <id>')}   新增一个产品壳（默认 pc）
-  ${C.g('prototype-agent serve')}              启动本地服务器
-  ${C.g('prototype-agent check [--changed]')}  自动化检查（静态红线 + 冒烟）
-  ${C.g('prototype-agent nav:sync')}           重建各产品 nav-tree.json
-  ${C.g('prototype-agent doctor')}             体检（Node / OpenCode / 配置 / Playwright）
-  ${C.g('prototype-agent update')}             如何更新框架
+  ${C.g('openprototype create <dir>')}       从零创建新项目
+  ${C.g('openprototype init')}               把框架植入当前已有项目（非破坏式）
+  ${C.g('openprototype add-product <id>')}   新增一个产品壳（默认 pc）
+  ${C.g('openprototype serve')}              启动本地服务器
+  ${C.g('openprototype check [--changed]')}  自动化检查（静态红线 + 冒烟）
+  ${C.g('openprototype nav:sync')}           重建各产品 nav-tree.json
+  ${C.g('openprototype doctor')}             体检（Node / OpenCode / 配置 / Playwright）
+  ${C.g('openprototype update')}             如何更新框架
 `);
 }
 
@@ -290,7 +290,7 @@ function main() {
     case '-h':
     case '--help':
     case 'help': return help();
-    default: die(`未知命令：${cmd}\n运行 prototype-agent --help 查看用法`);
+    default: die(`未知命令：${cmd}\n运行 openprototype --help 查看用法`);
   }
 }
 

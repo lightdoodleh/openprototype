@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * prototype-agent-kit 本地服务器。
+ * openprototype 本地服务器。
  *
  * 职责：
  *  1. 把项目根目录当静态站点跑（原型页面、nav-tree.json、PRD .md）。
@@ -291,7 +291,7 @@ async function startOrReuseOpenCode() {
   }
 
   if (!OC.bin) {
-    throw new Error('未找到 opencode 可执行文件。请先安装 OpenCode 并在 proto-kit.config.json 的 opencode.bin 指定路径，或运行 npx prototype-agent doctor 查看安装引导。');
+    throw new Error('未找到 opencode 可执行文件。请先安装 OpenCode 并在 proto-kit.config.json 的 opencode.bin 指定路径，或运行 npx openprototype doctor 查看安装引导。');
   }
 
   openCodeProcess = spawn(OC.bin, ['serve', '--hostname', OC.host, '--port', String(OC.port)], {
@@ -330,7 +330,7 @@ async function createOpenCodeSession(title) {
     title: title || '原型 Agent',
     agent: OC.agent,
     model: { id: model.modelID, providerID: model.providerID },
-    metadata: { source: 'prototype-agent-kit' }
+    metadata: { source: 'openprototype' }
   });
 }
 
@@ -647,7 +647,7 @@ server.on('error', (err) => {
 
 server.listen(PORT, HOST, () => {
   console.log('====================================');
-  console.log('prototype-agent-kit 服务器已启动');
+  console.log('openprototype 服务器已启动');
   console.log(`地址: http://127.0.0.1:${PORT}`);
   console.log(`监听: ${HOST}${HOST === '127.0.0.1' ? '（仅本机；局域网演示用 --host 0.0.0.0）' : '（局域网可访问预览；/api/* 写入与 Agent 接口仍仅限本机）'}`);
   console.log(`项目根: ${ROOT_DIR}`);

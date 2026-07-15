@@ -1,6 +1,6 @@
 # CONVENTIONS.md — 原型页面约定
 
-> 这份文件说明 **`prototype-agent check` 静态检查器实际强制的红线**，以及配套的写法约定。
+> 这份文件说明 **`openprototype check` 静态检查器实际强制的红线**，以及配套的写法约定。
 > 它和运行时（`scripts/check/` + `shared/` 引擎）耦合，改动检查器时同步改这里。
 > 你团队自己的 PRD 模板、业务规范、术语，请另建 `rules/` 放，不必写进本文件。
 
@@ -47,8 +47,8 @@
 ## 怎么跑检查
 
 ```bash
-prototype-agent check            # 扫全部产品页面
-prototype-agent check --changed  # 只扫 git 改动的页面
+openprototype check            # 扫全部产品页面
+openprototype check --changed  # 只扫 git 改动的页面
 ```
 
 生成或修改任何原型页面后立即跑一次，把 ERROR 全部修掉再交付（`auto-test` skill 会提醒 AI 这么做）。

@@ -1,6 +1,6 @@
 <div align="center">
 
-# prototype-agent-kit
+# openprototype
 
 **本地原型工作台 —— 左侧树形导航 · 中间原型预览 · 右侧 AI Agent**
 
@@ -16,7 +16,7 @@
 </div>
 
 <p align="center">
-  <img src="image/README/workbench-overview.png" alt="prototype-agent-kit 工作台预览" width="1100">
+  <img src="image/README/workbench-overview.png" alt="openprototype 工作台预览" width="1100">
 </p>
 
 ---
@@ -29,7 +29,7 @@
 - **AI 会写代码，但不懂你的规矩** —— 直接让通用 AI 改原型，它会整页重写、命名混乱、把状态文案写死、破坏既有交互。
 - **评审时页面散落各处** —— 几十个原型页没有统一入口，找页面、对版本靠记忆。
 
-`prototype-agent-kit` 把这三件事收进**一个本地工作台**：
+`openprototype` 把这三件事收进**一个本地工作台**：
 
 1. **PRD（`.md`）和原型（`.html`）同目录并排放**，一处浏览、一处对齐。
 2. **右侧 AI Agent 自动携带「当前页面 + 当前 PRD」上下文**，你说"把某字段改成 XX"，它只改相关部分、不整页重写；还能识别 PRD 里**标红**的增量改动精准落地。
@@ -78,7 +78,7 @@
 ### 场景 ①：从零建项目
 
 ```bash
-npx prototype-agent create myapp
+npx openprototype create myapp
 cd myapp
 npm install
 npm run serve
@@ -91,9 +91,9 @@ npm run serve
 
 ```bash
 cd 你的项目
-npm i prototype-agent-kit
-npx prototype-agent init          # 只补缺失文件、合并 package.json 脚本，不覆盖你已有内容
-npx prototype-agent add-product shop
+npm i openprototype
+npx openprototype init          # 只补缺失文件、合并 package.json 脚本，不覆盖你已有内容
+npx openprototype add-product shop
 npm run serve
 ```
 
@@ -116,7 +116,7 @@ npm run serve
 ### 安装 OpenCode（AI 面板前置）
 
 ```bash
-npx prototype-agent doctor    # 一键体检 Node / OpenCode / 配置 / Playwright
+npx openprototype doctor    # 一键体检 Node / OpenCode / 配置 / Playwright
 ```
 
 - 安装见 https://opencode.ai ；装好后确认在 PATH：`which opencode`（Windows：`where opencode`）。
@@ -147,7 +147,7 @@ npx prototype-agent doctor    # 一键体检 Node / OpenCode / 配置 / Playwrig
 | 层 | 内容 | 归属 | 更新方式 |
 |----|------|------|----------|
 | **运行时** | 服务器 / shared 引擎 / Agent 面板 / 检查脚本 | 框架（挂在 `/_kit/`） | `npm update` 一键升 |
-| **可编辑资产** | `AGENTS.md` `CONVENTIONS.md` `skills/` + 你自建的 `rules/` | 你拥有 | `prototype-agent update` 对比后按需合并 |
+| **可编辑资产** | `AGENTS.md` `CONVENTIONS.md` `skills/` + 你自建的 `rules/` | 你拥有 | `openprototype update` 对比后按需合并 |
 | **业务内容** | 你的产品 PRD / 原型 / 数据 | 你拥有 | 你自己维护 |
 
 > 框架只带**最小通用规范**（页面红线 + 编码克制）。PRD 模板、UI 规范、业务术语这类**方法论属于你**，放进 `rules/` 与 `product/<id>/`，不随框架分发、也不被升级覆盖。
@@ -162,15 +162,15 @@ npx prototype-agent doctor    # 一键体检 Node / OpenCode / 配置 / Playwrig
 
 ## 🧪 质量保障：红线检查器
 
-`prototype-agent check` 会强制这些页面红线（详见 [CONVENTIONS.md](templates/CONVENTIONS.md)）：
+`openprototype check` 会强制这些页面红线（详见 [CONVENTIONS.md](templates/CONVENTIONS.md)）：
 
 - 脚本加载顺序固定 · 数据必须走 `BaseDataManager`（禁页面级 localStorage）
 - 状态文案常量化（禁硬编码 `<option>`）· 禁 Google Fonts（系统字体栈）
 - `?mode=view` 物理隐藏（`display:none`，非 `disabled`）· 打开页面无 console 报错
 
 ```bash
-prototype-agent check            # 扫全部页面
-prototype-agent check --changed  # 只扫 git 改动
+openprototype check            # 扫全部页面
+openprototype check --changed  # 只扫 git 改动
 ```
 
 配套的 `auto-test` skill 会提醒 AI：**每次改完原型自动跑检查、修完 ERROR 再交付。**
@@ -205,14 +205,14 @@ prototype-agent check --changed  # 只扫 git 改动
 
 | 命令 | 作用 |
 |------|------|
-| `prototype-agent create <dir>` | 从零创建新项目（含可运行 demo） |
-| `prototype-agent init` | 把框架植入当前已有项目（非破坏式） |
-| `prototype-agent add-product <id>` | 新增一个产品壳（默认 pc） |
-| `prototype-agent serve` | 启动本地服务器 |
-| `prototype-agent check [--changed]` | 自动化检查（静态红线 + 冒烟） |
-| `prototype-agent nav:sync` | 扫描产品目录重建 `nav-tree.json` |
-| `prototype-agent doctor` | 体检（Node / OpenCode / 配置 / Playwright） |
-| `prototype-agent update` | 如何更新框架 |
+| `openprototype create <dir>` | 从零创建新项目（含可运行 demo） |
+| `openprototype init` | 把框架植入当前已有项目（非破坏式） |
+| `openprototype add-product <id>` | 新增一个产品壳（默认 pc） |
+| `openprototype serve` | 启动本地服务器 |
+| `openprototype check [--changed]` | 自动化检查（静态红线 + 冒烟） |
+| `openprototype nav:sync` | 扫描产品目录重建 `nav-tree.json` |
+| `openprototype doctor` | 体检（Node / OpenCode / 配置 / Playwright） |
+| `openprototype update` | 如何更新框架 |
 
 ---
 

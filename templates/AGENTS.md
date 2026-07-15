@@ -1,7 +1,7 @@
 # AGENTS.md — AI 协作上下文
 
 > 任何 AI 工具（Claude Code / Cursor / Codex / OpenCode 等）在这个仓库工作时，先读这份文件，再做事。
-> 这是 prototype-agent-kit 的通用模板，请按你的团队/产品补充自己的规范。
+> 这是 openprototype 的通用模板，请按你的团队/产品补充自己的规范。
 
 ---
 
@@ -23,8 +23,8 @@
 ## 二、原型页面必须遵守的约定
 
 页面的**硬性红线**（脚本顺序、BaseDataManager、状态常量化、字体栈、`?mode=view` 物理隐藏等）
-写在 **[CONVENTIONS.md](./CONVENTIONS.md)**，由 `prototype-agent check` 自动强制。
-**生成或修改任何原型页面后，立即跑 `prototype-agent check --changed`，把 ERROR 全部修掉再交付。**
+写在 **[CONVENTIONS.md](./CONVENTIONS.md)**，由 `openprototype check` 自动强制。
+**生成或修改任何原型页面后，立即跑 `openprototype check --changed`，把 ERROR 全部修掉再交付。**
 
 ---
 

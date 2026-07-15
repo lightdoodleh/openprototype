@@ -1,6 +1,6 @@
 # 客户列表 PRD（示例）
 
-> 这是 prototype-agent-kit 的示例 PRD。真实项目请按 `templates/docs/rules/list-page-prd-template.md` 编写。
+> 这是 openprototype 的示例 PRD。真实项目请按 `templates/docs/rules/list-page-prd-template.md` 编写。
 > 右侧 Agent 会自动携带「当前页面 + 当前 PRD」，可直接说"把某字段改成 XX"，Agent 会同步改页面与本 PRD。
 
 ## 一、页面信息

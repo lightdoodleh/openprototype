@@ -1,6 +1,6 @@
 # 客户表单 PRD（示例）
 
-> 这是 prototype-agent-kit 的示例 PRD。真实项目请按 `templates/docs/rules/form-page-prd-template.md` 编写。
+> 这是 openprototype 的示例 PRD。真实项目请按 `templates/docs/rules/form-page-prd-template.md` 编写。
 
 ## 一、页面信息
 
