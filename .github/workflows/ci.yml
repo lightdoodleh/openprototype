@@ -49,3 +49,24 @@ jobs:
         run: |
           node bin/cli.js doctor
           node bin/cli.js --help
+
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 安装 Playwright + Chromium
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+      - name: 运行时冒烟（无头浏览器打开全部 demo 页面，含 mode=view 物理隐藏检查）
+        run: node scripts/check/smoke-test.js
+      - name: 失败截图存档
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-screenshots
+          path: scripts/check/_screenshots/
+          if-no-files-found: ignore

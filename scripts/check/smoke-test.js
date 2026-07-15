@@ -80,19 +80,28 @@ function changedHtml() {
 }
 
 /* ---------- 启动 / 复用 server.js ---------- */
+/** 探测端口：'kit' = 本框架服务器；'foreign' = 端口被别的服务占用；false = 无人监听 */
 function ping() {
   return new Promise((res) => {
-    const req = http.get(BASE + '/', (r) => { r.destroy(); res(true); });
+    // 只有 kit 服务器会挂 /_kit/ 运行时；据此区分，避免把别的项目的服务器当成自己人复用
+    const req = http.get(BASE + '/_kit/shell/agent-panel.js', (r) => {
+      r.resume();
+      res(r.statusCode === 200 ? 'kit' : 'foreign');
+    });
     req.on('error', () => res(false));
     req.setTimeout(800, () => { req.destroy(); res(false); });
   });
 }
 async function ensureServer() {
-  if (await ping()) return null; // 已在运行，复用
+  const probe = await ping();
+  if (probe === 'kit') return null; // 已在运行，复用
+  if (probe === 'foreign') {
+    throw new Error(`端口 ${PORT} 已被其他服务占用（不是本框架的服务器）。请先关闭该进程，或改 proto-kit.config.json 的 port / 用 PROTO_KIT_PORT 覆盖。`);
+  }
   const proc = spawn('node', [SERVER_JS], { cwd: ROOT, stdio: 'ignore' });
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, 250));
-    if (await ping()) return proc;
+    if (await ping() === 'kit') return proc;
   }
   proc.kill();
   throw new Error(`服务器未能在端口 ${PORT} 启动（${SERVER_JS}）`);
@@ -145,7 +154,11 @@ async function main() {
 
     let loadFailed = false;
     try {
-      await page.goto(urlFor(file), { waitUntil: 'networkidle', timeout: 15000 });
+      const resp = await page.goto(urlFor(file), { waitUntil: 'networkidle', timeout: 15000 });
+      if (!resp || resp.status() >= 400) {
+        loadFailed = true;
+        errors.push({ file: rel, rule: '加载', msg: `页面本体返回 HTTP ${resp ? resp.status() : '无响应'}` });
+      }
       await page.waitForTimeout(400);
     } catch (e) {
       loadFailed = true;
