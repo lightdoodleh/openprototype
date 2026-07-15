@@ -21,10 +21,13 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const { spawn, execSync } = require('child_process');
+const { loadConfig } = require('../../lib/config');
 
-const ROOT = path.resolve(__dirname, '..', '..');
-const PORT = 8082;
-const BASE = `http://localhost:${PORT}`;
+const CONFIG = loadConfig();
+const ROOT = CONFIG.rootDir;                                              // 用户项目根（含 proto-kit.config.json）
+const SERVER_JS = path.resolve(__dirname, '..', '..', 'runtime', 'server.js'); // 本包的服务器入口
+const PORT = CONFIG.port;
+const BASE = `http://127.0.0.1:${PORT}`; // 服务器默认只绑 127.0.0.1；老版本 Node 的 localhost 可能先解析 ::1 不回退
 const SHOT_DIR = path.join(__dirname, '_screenshots');
 const NON_PAGE_DIRS = new Set(['shared', 'references', 'templates', 'node_modules', '.git', '.claude']);
 
@@ -58,10 +61,19 @@ function listHtml(targets) {
   }
   return [...out];
 }
+/** 解析 `git status --porcelain` 单行：重命名/复制行（`R  old -> new`）取新路径，去掉包裹引号 */
+function parsePorcelainPath(line) {
+  let p = line.slice(3);
+  const arrow = p.indexOf(' -> ');
+  if (arrow !== -1) p = p.slice(arrow + 4);
+  p = p.trim();
+  if (p.startsWith('"') && p.endsWith('"')) p = p.slice(1, -1);
+  return p;
+}
 function changedHtml() {
   try {
-    return execSync('git -C "' + ROOT + '" status --porcelain', { encoding: 'utf8' })
-      .split('\n').map((l) => l.slice(3).trim()).filter(Boolean)
+    return execSync('git -C "' + ROOT + '" -c core.quotepath=false status --porcelain', { encoding: 'utf8' })
+      .split('\n').map(parsePorcelainPath).filter(Boolean)
       .map((f) => path.join(ROOT, f))
       .filter((f) => fs.existsSync(f) && /\.html$/i.test(f) && !isInfra(f) && path.basename(f) !== 'index.html');
   } catch { return []; }
@@ -77,13 +89,13 @@ function ping() {
 }
 async function ensureServer() {
   if (await ping()) return null; // 已在运行，复用
-  const proc = spawn('node', [path.join(ROOT, 'server.js')], { cwd: ROOT, stdio: 'ignore' });
+  const proc = spawn('node', [SERVER_JS], { cwd: ROOT, stdio: 'ignore' });
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, 250));
     if (await ping()) return proc;
   }
   proc.kill();
-  throw new Error(`server.js 未能在端口 ${PORT} 启动`);
+  throw new Error(`服务器未能在端口 ${PORT} 启动（${SERVER_JS}）`);
 }
 
 function urlFor(file, query = '') {

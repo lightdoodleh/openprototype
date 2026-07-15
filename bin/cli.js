@@ -86,6 +86,17 @@ function scaffoldProductShell(projectRoot, productId, productTitle) {
   writeFileSafe(path.join(dir, 'nav-tree.json'), '[]\n');
 }
 
+/**
+ * 新项目 package.json 里本框架的依赖源。
+ * 未发布公网 npm 前用 GitHub 仓库（写 ^version 会让用户 npm install 404）；
+ * 发布 npm 后把这里改回 `^${pkg.version}` 即可。
+ */
+function kitDependencySpec() {
+  const pkg = readJson(path.join(PKG_ROOT, 'package.json'), {});
+  if (typeof pkg.repository === 'string' && pkg.repository.startsWith('github:')) return pkg.repository;
+  return `^${pkg.version || '0.1.0'}`;
+}
+
 function loadOrInitConfig(projectRoot) {
   const p = path.join(projectRoot, CONFIG_FILENAME);
   return fs.existsSync(p) ? readJson(p, JSON.parse(JSON.stringify(DEFAULTS))) : JSON.parse(JSON.stringify(DEFAULTS));
@@ -129,7 +140,7 @@ function cmdCreate(argv) {
       'check:changed': 'prototype-agent check --changed',
       'nav:sync': 'prototype-agent nav:sync'
     },
-    dependencies: { 'prototype-agent-kit': `^${readJson(path.join(PKG_ROOT, 'package.json'), {}).version || '0.1.0'}` }
+    dependencies: { 'prototype-agent-kit': kitDependencySpec() }
   };
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
   ok('写入 package.json');
@@ -141,7 +152,7 @@ function cmdCreate(argv) {
   info(C.g('\n✔ 项目已创建。下一步：\n'));
   info(`  cd ${dir}`);
   info('  npm install');
-  info('  npm run serve      ' + C.dim('# 打开 http://localhost:8082/product/demo/pc/index.html'));
+  info('  npm run serve      ' + C.dim('# 打开 http://127.0.0.1:8082/product/demo/pc/index.html'));
   info('\n  ' + C.dim('（右侧 AI 面板需要本机安装 OpenCode，运行 npx prototype-agent doctor 检查）\n'));
 }
 

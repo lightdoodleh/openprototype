@@ -18,10 +18,28 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { loadConfig } = require('../lib/config');
 
-const CONFIG = loadConfig();
+function resolvePortArg(fallback) {
+  const i = process.argv.indexOf('--port');
+  if (i !== -1 && process.argv[i + 1]) return Number(process.argv[i + 1]);
+  return fallback;
+}
+
+function resolveHostArg(fallback) {
+  const i = process.argv.indexOf('--host');
+  if (i !== -1 && process.argv[i + 1]) return process.argv[i + 1];
+  return fallback;
+}
+
+let CONFIG = loadConfig();
+// 当前目录没有 proto-kit.config.json 时（例如直接跑本包自带 demo），回退用本包自己的配置
+if (!CONFIG.hasConfigFile) {
+  const pkgConfig = loadConfig(__dirname);
+  if (pkgConfig.hasConfigFile) CONFIG = pkgConfig;
+}
 const ROOT_DIR = CONFIG.rootDir;
 const KIT_RUNTIME_DIR = __dirname;           // 本包 runtime/ 目录（可能位于 node_modules 内）
-const PORT = CONFIG.port;
+const PORT = resolvePortArg(CONFIG.port);
+const HOST = resolveHostArg(CONFIG.host || '127.0.0.1');
 const PRODUCT_ROOT = path.resolve(ROOT_DIR, 'product');
 const AGENT_WRITE_ROOTS = CONFIG.productRoots.map((r) => r.dir); // Agent 只能写这些产品目录
 const IS_WIN = process.platform === 'win32';
@@ -98,6 +116,13 @@ function resolveAgentWritablePath(inputPath, expectedExt) {
 function isLoopbackRequest(req) {
   const remoteAddress = String(req.socket.remoteAddress || '');
   return remoteAddress === '127.0.0.1' || remoteAddress === '::1' || remoteAddress === '::ffff:127.0.0.1';
+}
+
+/** 写入 / Agent 类接口一律只接受本机请求，即使服务器用 --host 0.0.0.0 对局域网开放预览 */
+function requireLoopback(req, res) {
+  if (isLoopbackRequest(req)) return true;
+  sendJson(res, 403, { ok: false, error: '该接口仅允许从本机访问' });
+  return false;
 }
 
 // ── PRD 保存 ───────────────────────────────────────────
@@ -427,10 +452,7 @@ async function proxyOpenCodeEvents(req, res, sessionID) {
 
 async function handleAgentApi(req, res, urlPath) {
   if (!urlPath.startsWith('/api/agent/')) return false;
-  if (!isLoopbackRequest(req)) {
-    sendJson(res, 403, { ok: false, error: 'Agent 仅允许从本机访问' });
-    return true;
-  }
+  if (!requireLoopback(req, res)) return true;
 
   try {
     if (req.method === 'GET' && urlPath === '/api/agent/status') {
@@ -548,6 +570,12 @@ async function handleAgentApi(req, res, urlPath) {
 // ── 静态文件 ───────────────────────────────────────────
 function serveStatic(req, res, baseDir, relPath) {
   const safeRel = path.normalize(relPath).replace(/^(\.\.[/\\])+/, '');
+  // 点开头的路径段（.git / .env / .claude …）不对外提供，避免 --host 0.0.0.0 演示时泄露
+  if (safeRel.split(/[/\\]/).some((seg) => seg.length > 1 && seg.startsWith('.'))) {
+    console.log(`[403] ${req.url} -> dotfile`);
+    res.writeHead(403);
+    return res.end('Forbidden');
+  }
   const filePath = path.join(baseDir, safeRel === '' || safeRel === '.' ? 'index.html' : safeRel);
   if (!filePath.startsWith(baseDir)) {
     res.writeHead(403);
@@ -575,13 +603,20 @@ function serveStatic(req, res, baseDir, relPath) {
 }
 
 const server = http.createServer(async (req, res) => {
-  const urlPath = decodeURIComponent(req.url.split('?')[0]);
+  let urlPath;
+  try {
+    urlPath = decodeURIComponent(req.url.split('?')[0]);
+  } catch (err) {
+    console.log(`[400] ${req.url} -> URI malformed`);
+    res.writeHead(400);
+    return res.end('Bad Request');
+  }
 
   if (await handleAgentApi(req, res, urlPath)) return;
 
-  if (req.method === 'POST' && urlPath === '/api/save-prd') return handleSavePrd(req, res);
-  if (req.method === 'POST' && urlPath === '/api/build-update-page-prompt') return handleBuildUpdatePagePrompt(req, res);
-  if (req.method === 'POST' && urlPath === '/api/update-page-from-prd') return handleUpdatePageFromPrd(req, res);
+  if (req.method === 'POST' && urlPath === '/api/save-prd') return requireLoopback(req, res) && handleSavePrd(req, res);
+  if (req.method === 'POST' && urlPath === '/api/build-update-page-prompt') return requireLoopback(req, res) && handleBuildUpdatePagePrompt(req, res);
+  if (req.method === 'POST' && urlPath === '/api/update-page-from-prd') return requireLoopback(req, res) && handleUpdatePageFromPrd(req, res);
 
   // 内置运行时挂在 /_kit/ 下（agent 面板、shared 引擎），随包升级
   if (urlPath.startsWith('/_kit/')) {
@@ -597,10 +632,11 @@ server.on('error', (err) => {
   process.exit(1);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log('====================================');
   console.log('prototype-agent-kit 服务器已启动');
-  console.log(`地址: http://localhost:${PORT}`);
+  console.log(`地址: http://127.0.0.1:${PORT}`);
+  console.log(`监听: ${HOST}${HOST === '127.0.0.1' ? '（仅本机；局域网演示用 --host 0.0.0.0）' : '（局域网可访问预览；/api/* 写入与 Agent 接口仍仅限本机）'}`);
   console.log(`项目根: ${ROOT_DIR}`);
   console.log(`OpenCode: ${OC.bin || '未检测到（Agent 面板需要它，运行 doctor 查看安装引导）'}`);
   console.log('====================================');

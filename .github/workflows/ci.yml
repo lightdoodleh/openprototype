@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: 静态红线检查（含导航树同步）
+        run: node scripts/check/run-checks.js --static-only
+
+      - name: 服务器冒烟（启动 / 静态页 / 畸形 URL 不崩溃 / dotfile 屏蔽）
+        run: |
+          node runtime/server.js --port 8123 &
+          SERVER_PID=$!
+          sleep 1.5
+          curl -sf http://127.0.0.1:8123/product/demo/pc/index.html > /dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:8123/%')" = "400"
+          test "$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:8123/.git/config')" = "403"
+          # 畸形请求后服务器必须仍然存活
+          curl -sf http://127.0.0.1:8123/product/demo/pc/index.html > /dev/null
+          kill $SERVER_PID
+
+      - name: create 脚手架流程（生成项目 + 依赖模式跑检查器）
+        run: |
+          node bin/cli.js create /tmp/ci-app
+          cd /tmp/ci-app
+          # 模拟"作为依赖安装"：从新项目目录运行本包的检查脚本，必须扫的是新项目
+          node "$GITHUB_WORKSPACE/scripts/check/static-check.js" --json | node -e "
+            let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
+              const r=JSON.parse(s);
+              if(r.scanned<1){console.error('依赖模式下未扫到新项目页面');process.exit(1)}
+              console.log('scanned',r.scanned,'errors',r.errors.length);
+              process.exit(r.errors.length?1:0);
+            })"
+
+      - name: doctor / help 不报错
+        run: |
+          node bin/cli.js doctor
+          node bin/cli.js --help

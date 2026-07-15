@@ -797,7 +797,7 @@ function savePrdEdits() {
             try {
                 data = JSON.parse(text);
             } catch (e) {
-                throw new Error('当前地址不支持保存，请通过 http://localhost:8082 打开原型后再编辑');
+                throw new Error('当前地址不支持保存，请通过本地服务器（npm run serve，默认 http://127.0.0.1:8082）打开原型后再编辑');
             }
             if (!response.ok || !data.ok) {
                 throw new Error(data.error || ('保存失败: ' + response.status));

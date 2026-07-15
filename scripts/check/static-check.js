@@ -17,8 +17,9 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { loadConfig } = require('../../lib/config');
 
-const ROOT = path.resolve(__dirname, '..', '..');
+const ROOT = loadConfig().rootDir;
 
 // 脚本加载顺序铁律（AGENTS.md §2.4），只校验出现的核心文件的相对先后
 const SCRIPT_ORDER = [
@@ -69,16 +70,27 @@ function isInfraPath(p) {
 
 function changedFiles() {
   try {
-    const out = execSync('git -C "' + ROOT + '" status --porcelain', { encoding: 'utf8' });
+    // core.quotepath=false：中文等非 ASCII 路径按原样输出（默认会转成 \346… 转义引号串）
+    const out = execSync('git -C "' + ROOT + '" -c core.quotepath=false status --porcelain', { encoding: 'utf8' });
     return out
       .split('\n')
-      .map((l) => l.slice(3).trim())
+      .map(parsePorcelainPath)
       .filter(Boolean)
       .map((f) => path.join(ROOT, f))
       .filter((f) => fs.existsSync(f) && /\.(html|js)$/i.test(f) && !isInfraPath(f));
   } catch {
     return [];
   }
+}
+
+/** 解析 `git status --porcelain` 单行：重命名/复制行（`R  old -> new`）取新路径，去掉包裹引号 */
+function parsePorcelainPath(line) {
+  let p = line.slice(3);
+  const arrow = p.indexOf(' -> ');
+  if (arrow !== -1) p = p.slice(arrow + 4);
+  p = p.trim();
+  if (p.startsWith('"') && p.endsWith('"')) p = p.slice(1, -1);
+  return p;
 }
 
 /* ---------- 读取每个产品的状态文案（用于检测硬编码） ---------- */
