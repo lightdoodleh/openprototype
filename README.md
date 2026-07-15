@@ -1,6 +1,6 @@
 <div align="center">
 
-# openprototype
+# OpenPrototype
 
 **本地原型工作台 —— 左侧树形导航 · 中间原型预览 · 右侧 AI Agent**
 
