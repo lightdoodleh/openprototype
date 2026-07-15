@@ -623,6 +623,14 @@ const server = http.createServer(async (req, res) => {
     return serveStatic(req, res, KIT_RUNTIME_DIR, urlPath.slice('/_kit/'.length));
   }
 
+  // 产品引擎回退：product/<id>/shared/** 在项目里不存在时，回退到内置引擎（等价 /_kit/shared/**）。
+  // 存量页面用相对路径引用 ../shared/xxx.js 时无需改动即可吃到框架引擎；
+  // 本地同名文件优先（迁移期可按文件保留旧版，业务组件 components/ constants/ 始终在产品本地）。
+  const sharedFallback = urlPath.match(/^\/product\/[^/]+\/shared\/(.+)$/);
+  if (sharedFallback && !fs.existsSync(path.join(ROOT_DIR, '.' + urlPath))) {
+    return serveStatic(req, res, path.join(KIT_RUNTIME_DIR, 'shared'), sharedFallback[1]);
+  }
+
   serveStatic(req, res, ROOT_DIR, urlPath.replace(/^\//, ''));
 });
 
