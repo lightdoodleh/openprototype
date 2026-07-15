@@ -4,6 +4,10 @@
   "description": "本地原型工作台：左侧树形导航 + 中间原型预览 + 右侧 AI Agent（OpenCode）。PRD 与 HTML/JS 原型协作，含自动化检查。",
   "keywords": ["prototype", "prd", "opencode", "agent", "scaffold", "product-manager"],
   "license": "MIT",
+  "author": "lightdoodleh",
+  "repository": "github:lightdoodleh/prototype-agent-kit",
+  "homepage": "https://github.com/lightdoodleh/prototype-agent-kit#readme",
+  "bugs": "https://github.com/lightdoodleh/prototype-agent-kit/issues",
   "engines": {
     "node": ">=16"
   },

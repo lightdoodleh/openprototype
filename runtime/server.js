@@ -570,6 +570,12 @@ async function handleAgentApi(req, res, urlPath) {
 // ── 静态文件 ───────────────────────────────────────────
 function serveStatic(req, res, baseDir, relPath) {
   const safeRel = path.normalize(relPath).replace(/^(\.\.[/\\])+/, '');
+  // 点开头的路径段（.git / .env / .claude …）不对外提供，避免 --host 0.0.0.0 演示时泄露
+  if (safeRel.split(/[/\\]/).some((seg) => seg.length > 1 && seg.startsWith('.'))) {
+    console.log(`[403] ${req.url} -> dotfile`);
+    res.writeHead(403);
+    return res.end('Forbidden');
+  }
   const filePath = path.join(baseDir, safeRel === '' || safeRel === '.' ? 'index.html' : safeRel);
   if (!filePath.startsWith(baseDir)) {
     res.writeHead(403);

@@ -89,7 +89,10 @@
 ### 场景 ①：从零建项目
 
 ```bash
-npx prototype-agent create myapp
+# 尚未发布 npm，先从 GitHub 安装 CLI（发布后可直接 npx prototype-agent）：
+npm install -g github:lightdoodleh/prototype-agent-kit
+
+prototype-agent create myapp
 cd myapp
 npm install
 npm run serve
@@ -102,12 +105,11 @@ npm run serve
 
 ```bash
 cd 你的项目
+npm i github:lightdoodleh/prototype-agent-kit   # 发布 npm 后：npm i prototype-agent-kit
 npx prototype-agent init          # 只补缺失文件、合并 package.json 脚本，不覆盖你已有内容
 npx prototype-agent add-product shop
 npm run serve
 ```
-
-> 未发布公网 npm 时可用：`npm i github:<your-org>/prototype-agent-kit`
 
 ---
 
