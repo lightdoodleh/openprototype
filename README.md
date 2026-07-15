@@ -123,7 +123,7 @@ npm run serve
 
 - **自动带上下文**：点左侧任一页面，面板顶部就显示「本条消息将携带：页面 X / PRD Y」，无需你手动贴路径。
 - **按 PRD 标红增量更新**：一键把 PRD 里 `<span style="color:red">…</span>` 标红的内容作为**唯一改动范围**发给 Agent —— 只改标红处，未标红的历史内容当背景，不重写、不"顺手优化"。
-- **本机私有**：`/api/agent/*` 仅接受 `127.0.0.1` 访问，不对外暴露。
+- **本机私有**：服务器默认只监听 `127.0.0.1`；所有写入与 Agent 接口（`/api/*`）只接受本机请求——即使你用 `--host 0.0.0.0` 把预览开放给局域网同事，别人也只能看页面，改不了文件、动不了 Agent。
 
 ### 安装 OpenCode（AI 面板前置）
 
@@ -188,6 +188,7 @@ prototype-agent check --changed  # 只扫 git 改动
 ```json
 {
   "port": 8082,
+  "host": "127.0.0.1",                     // 默认仅本机；'0.0.0.0' 可让局域网看预览（/api/* 仍仅限本机）
   "opencode": {
     "bin": "auto",                       // 'auto' 自动探测；也可写绝对路径
     "model": "deepseek/deepseek-v4-flash",
@@ -201,8 +202,8 @@ prototype-agent check --changed  # 只扫 git 改动
 }
 ```
 
-环境变量可临时覆盖：`PROTO_KIT_PORT` · `OPENCODE_BIN` · `OPENCODE_MODEL` · `OPENCODE_PORT`。
-也可用 `node runtime/server.js --port 9000` 临时指定端口。
+环境变量可临时覆盖：`PROTO_KIT_PORT` · `PROTO_KIT_HOST` · `OPENCODE_BIN` · `OPENCODE_MODEL` · `OPENCODE_PORT`。
+也可用 `node runtime/server.js --port 9000 --host 0.0.0.0` 临时指定端口 / 监听地址。
 
 ---
 
