@@ -169,7 +169,7 @@ npx prototype-agent doctor    # 一键体检 Node / OpenCode / 配置 / Playwrig
 **引擎回退解析**：页面用相对路径引用 `../shared/xxx.js` 时，若 `product/<id>/shared/` 下没有该文件，服务器自动回退到框架内置引擎（等价 `/_kit/shared/`）。因此：
 
 - 通用引擎（`base-manager.js`、`common/*`、`styles.css`）**不必复制进产品目录**，升级框架即升级引擎；
-- 产品目录只放自己的**业务组件与常量**（`shared/components/`、`shared/constants/`）和设计资源；
+- 产品目录只放自己的**业务组件与常量**（`shared/components/`、`shared/constants/`）和设计资源——这两个目录**永不回退**，缺失时直接 404 暴露问题，不会被框架的通用版静默顶替；
 - 同名文件**本地优先**——从旧项目迁移时，可以按文件保留本地旧版逐步切换。
 
 ---
