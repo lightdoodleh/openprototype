@@ -148,7 +148,7 @@ function cmdCreate(argv) {
   info(`  cd ${dir}`);
   info('  npm install');
   info('  npm run serve      ' + C.dim('# 打开 http://127.0.0.1:8082/product/demo/pc/index.html'));
-  info('\n  ' + C.dim('（右侧 AI 面板需要本机安装 OpenCode，运行 npx prototype-agent doctor 检查）\n'));
+  info('\n  ' + C.dim('（右侧 AI 面板需要本机安装 OpenCode，npm install 后运行 npx prototype-agent doctor 检查）\n'));
 }
 
 // ── 命令：init（植入已有项目） ──────────────────────────
