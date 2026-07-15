@@ -86,14 +86,9 @@ function scaffoldProductShell(projectRoot, productId, productTitle) {
   writeFileSafe(path.join(dir, 'nav-tree.json'), '[]\n');
 }
 
-/**
- * 新项目 package.json 里本框架的依赖源。
- * 未发布公网 npm 前用 GitHub 仓库（写 ^version 会让用户 npm install 404）；
- * 发布 npm 后把这里改回 `^${pkg.version}` 即可。
- */
+/** 新项目 package.json 里本框架的依赖版本（已发布 npm，语义化版本管理） */
 function kitDependencySpec() {
   const pkg = readJson(path.join(PKG_ROOT, 'package.json'), {});
-  if (typeof pkg.repository === 'string' && pkg.repository.startsWith('github:')) return pkg.repository;
   return `^${pkg.version || '0.1.0'}`;
 }
 
