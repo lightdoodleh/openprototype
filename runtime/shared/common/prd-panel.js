@@ -3,7 +3,8 @@
  * 管理 PRD 文档的加载、渲染和交互
  */
 
-// 页面可在引入本模块前声明这三个全局以覆盖默认行为；未声明时使用默认值。
+// 页面可在引入本模块前声明这些全局以覆盖默认行为；未声明时使用默认值。
+// PRD_OVERVIEW_VERSION 启用“当前版本”虚拟页签，PRD_WORKSPACE_MAP 配置多文档工作区。
 var PRD_BASE_PATH = typeof PRD_BASE_PATH !== 'undefined' ? PRD_BASE_PATH : './';
 var PRD_FILE_MAP = typeof PRD_FILE_MAP !== 'undefined' ? PRD_FILE_MAP : {};
 var PRD_CACHE = typeof PRD_CACHE !== 'undefined' ? PRD_CACHE : {};
@@ -246,8 +247,9 @@ function initPrdPanel() {
         if (prdEditMode) return;
         
         var target = e.target;
-        var isInsidePanel = target.closest('#prdPanel');
-        var isFloatBtn = target.closest('.prd-float-btn');
+        var eventPath = typeof e.composedPath === 'function' ? e.composedPath() : [];
+        var isInsidePanel = eventPath.indexOf(prdPanel) !== -1 || target.closest('#prdPanel');
+        var isFloatBtn = eventPath.indexOf(prdFloatBtn) !== -1 || target.closest('.prd-float-btn');
         
         if (!isInsidePanel && !isFloatBtn) {
             prdPanel.classList.remove('open');
@@ -279,13 +281,18 @@ var prdCurrentPath = '';
 var prdCurrentRawContent = '';
 var prdWorkspaceTabs = [];
 var prdEditMode = false;
+var prdWorkspaceRootPath = '';
+var prdOverviewMarkdown = '';
+var prdOverviewBuildToken = 0;
+var PRD_OVERVIEW_PATH = './__openprototype_current_version__.md';
 
 function notifyNavigatorPrdContext() {
     if (window.parent === window) return;
     var targetOrigin = window.location.origin === 'null' ? '*' : window.location.origin;
     var prdPath = '';
-    if (prdCurrentPath) {
-        prdPath = decodeURIComponent(new URL(prdCurrentPath, window.location.href).pathname);
+    var contextPath = isPrdOverviewPath(prdCurrentPath) ? prdWorkspaceRootPath : prdCurrentPath;
+    if (contextPath) {
+        prdPath = decodeURIComponent(new URL(contextPath, window.location.href).pathname);
     }
     window.parent.postMessage({
         type: 'pak-prd-context',
@@ -367,6 +374,188 @@ function getPrdWorkspaceConfig(currentPage) {
 
 function getPrdDisplayName(filePath) {
     return (filePath || '').split('/').pop().replace(/\.md(?:#.*)?$/i, '').replace(/_/g, ' ');
+}
+
+function getPrdOverviewVersion() {
+    if (typeof PRD_OVERVIEW_VERSION === 'undefined') return '';
+    return String(PRD_OVERVIEW_VERSION || '').trim();
+}
+
+function isPrdOverviewPath(filePath) {
+    return normalizePrdPath(filePath) === normalizePrdPath(PRD_OVERVIEW_PATH);
+}
+
+function escapePrdRegExp(text) {
+    return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function containsPrdVersion(text, version) {
+    var normalizedVersion = String(version || '').replace(/^v/i, '');
+    if (!normalizedVersion) return false;
+    var pattern = '(^|[^0-9.])v?' + escapePrdRegExp(normalizedVersion) + '(?=$|[^0-9.])';
+    return new RegExp(pattern, 'i').test(String(text || ''));
+}
+
+function getPrdHeadingBefore(lines, index) {
+    for (var lineIndex = index - 1; lineIndex >= 0; lineIndex -= 1) {
+        var match = String(lines[lineIndex] || '').match(/^#{1,6}\s+(.+)$/);
+        if (match) return match[1].replace(/<[^>]+>/g, '').trim();
+    }
+    return '';
+}
+
+function isPrdTableDivider(line) {
+    return /^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(String(line || ''));
+}
+
+function collectPrdVersionSections(content, version) {
+    var lines = String(content || '').split(/\r?\n/);
+    var sections = [];
+
+    for (var index = 0; index < lines.length; index += 1) {
+        var line = lines[index];
+        if (/^\s*\|.*\|\s*$/.test(line)) {
+            var tableStart = index;
+            var tableLines = [];
+            while (index < lines.length && /^\s*\|.*\|\s*$/.test(lines[index])) {
+                tableLines.push(lines[index]);
+                index += 1;
+            }
+            index -= 1;
+
+            if (tableLines.length >= 3 && isPrdTableDivider(tableLines[1])) {
+                var matchedRows = tableLines.slice(2).filter(function(row) {
+                    return containsPrdVersion(row, version);
+                });
+                if (matchedRows.length) {
+                    sections.push({
+                        heading: getPrdHeadingBefore(lines, tableStart),
+                        markdown: [tableLines[0], tableLines[1]].concat(matchedRows).join('\n')
+                    });
+                }
+            }
+            continue;
+        }
+
+        var headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+        if (headingMatch && containsPrdVersion(line, version)) {
+            var headingLevel = headingMatch[1].length;
+            var sectionLines = [line];
+            var nextIndex = index + 1;
+            while (nextIndex < lines.length) {
+                var nextHeading = lines[nextIndex].match(/^(#{1,6})\s+/);
+                if (nextHeading && nextHeading[1].length <= headingLevel) break;
+                sectionLines.push(lines[nextIndex]);
+                nextIndex += 1;
+            }
+            sections.push({ heading: '', markdown: sectionLines.join('\n').trim() });
+            index = nextIndex - 1;
+            continue;
+        }
+
+        if (containsPrdVersion(line, version)) {
+            sections.push({
+                heading: getPrdHeadingBefore(lines, index),
+                markdown: line
+            });
+        }
+    }
+
+    return sections;
+}
+
+function buildPrdOverviewMarkdown(tabs, contents, version) {
+    var documentSections = [];
+
+    tabs.forEach(function(tab, index) {
+        var sections = collectPrdVersionSections(contents[index], version);
+        if (sections.length) documentSections.push({ tab: tab, sections: sections });
+    });
+
+    if (!documentSections.length) return '';
+
+    var markdown = [
+        '# ' + version + ' 更新总览',
+        '',
+        '> 自动汇总当前页面工作区内各 PRD 中标注为 ' + version + ' 的修订说明与详细规则。',
+        ''
+    ];
+
+    documentSections.forEach(function(documentItem) {
+        var tab = documentItem.tab;
+        var documentTitle = tab.title === '主文档' ? getPrdDisplayName(tab.path) : tab.title;
+        markdown.push('## ' + documentTitle, '', '来源：`' + tab.path.split('/').pop() + '`', '');
+
+        documentItem.sections.forEach(function(section) {
+            if (section.heading) markdown.push('### ' + section.heading, '');
+            markdown.push(section.markdown, '');
+        });
+    });
+
+    return markdown.join('\n').trim();
+}
+
+function renderPrdOverview() {
+    var version = getPrdOverviewVersion();
+    var contentEl = document.getElementById('prdPanelContent');
+    var titleEl = document.getElementById('prdPanelTitle');
+    var fileNameEl = document.getElementById('prdPanelFileName');
+    var editBtn = document.getElementById('prdPanelEditBtn');
+    if (!contentEl || !prdOverviewMarkdown) return;
+
+    prdCurrentFileName = version + ' 当前版本';
+    prdCurrentPath = PRD_OVERVIEW_PATH;
+    prdCurrentRawContent = prdOverviewMarkdown;
+    if (titleEl) titleEl.textContent = version + ' 更新总览 - PRD';
+    if (fileNameEl) fileNameEl.textContent = '';
+    if (editBtn) editBtn.style.display = 'none';
+
+    contentEl.innerHTML = renderMarkdownToHtml(prdOverviewMarkdown);
+    wrapPrdTables(contentEl);
+    renderPrdTabs(PRD_OVERVIEW_PATH);
+    bindPrdTabs();
+    notifyNavigatorPrdContext();
+}
+
+function preparePrdOverview(rootPath, options) {
+    options = options || {};
+    var version = getPrdOverviewVersion();
+    var realTabs = prdWorkspaceTabs.filter(function(tab) {
+        return !isPrdOverviewPath(tab.path);
+    });
+    var contentOverrides = options.contentOverrides || {};
+    var buildToken = ++prdOverviewBuildToken;
+    var normalizedRootPath = normalizePrdPath(rootPath);
+
+    if (!version || !realTabs.length) {
+        prdOverviewMarkdown = '';
+        prdWorkspaceTabs = realTabs;
+        return Promise.resolve('');
+    }
+
+    return Promise.all(realTabs.map(function(tab) {
+        var normalizedPath = normalizePrdPath(tab.path);
+        if (Object.prototype.hasOwnProperty.call(contentOverrides, normalizedPath)) {
+            return Promise.resolve(contentOverrides[normalizedPath]);
+        }
+        return loadMarkdownFile(tab.path);
+    })).then(function(contents) {
+        if (buildToken !== prdOverviewBuildToken) return '';
+
+        prdOverviewMarkdown = buildPrdOverviewMarkdown(realTabs, contents, version);
+        prdWorkspaceTabs = prdOverviewMarkdown ? [{
+            title: '当前版本',
+            path: PRD_OVERVIEW_PATH
+        }].concat(realTabs) : realTabs;
+
+        if (prdOverviewMarkdown && options.activateWhenReady && normalizePrdPath(prdCurrentPath) === normalizedRootPath) {
+            renderPrdOverview();
+        } else {
+            renderPrdTabs(prdCurrentPath);
+            bindPrdTabs();
+        }
+        return prdOverviewMarkdown;
+    });
 }
 
 function normalizePrdPath(filePath) {
@@ -524,12 +713,22 @@ function renderLoadedPrd(result, options) {
     var currentPath = normalizePrdPath(result.path || result.fileName);
     setPrdHeader(currentPath, options && options.title);
     prdCurrentRawContent = result.content;
+    var editBtn = document.getElementById('prdPanelEditBtn');
+    if (editBtn && !prdEditMode) editBtn.style.display = '';
     prdContentEl.innerHTML = renderMarkdownToHtml(result.content);
     wrapPrdTables(prdContentEl);
 
     if (options && options.resetWorkspace) {
         var configuredTabs = buildWorkspaceTabsFromConfig(options.workspaceConfig, currentPath);
         prdWorkspaceTabs = configuredTabs.length ? configuredTabs : buildWorkspaceTabsFromContent(prdContentEl, currentPath);
+        prdWorkspaceRootPath = currentPath;
+        prdOverviewMarkdown = '';
+        var contentOverrides = {};
+        contentOverrides[currentPath] = result.content;
+        preparePrdOverview(currentPath, {
+            activateWhenReady: true,
+            contentOverrides: contentOverrides
+        });
     } else if (options && options.title) {
         var targetPath = normalizePrdPath(currentPath);
         var exists = prdWorkspaceTabs.some(function(tab) {
@@ -553,6 +752,11 @@ function openPrdPath(filePath, options) {
     var prdContentEl = document.getElementById('prdPanelContent');
     var normalizedPath = normalizePrdPath(filePath);
     if (!prdContentEl || !normalizedPath) return Promise.resolve(null);
+
+    if (isPrdOverviewPath(normalizedPath)) {
+        renderPrdOverview();
+        return Promise.resolve({ path: PRD_OVERVIEW_PATH, content: prdOverviewMarkdown });
+    }
 
     prdContentEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">加载中...</div>';
 
@@ -587,6 +791,9 @@ function updatePrdContent() {
     var prdFileCandidates = getPrdFileCandidates(currentPage, mode);
     var prdFileName = prdFileCandidates[0];
     var workspaceConfig = getPrdWorkspaceConfig(currentPage);
+    prdOverviewBuildToken += 1;
+    prdWorkspaceRootPath = '';
+    prdOverviewMarkdown = '';
     
     if (!prdFileName) {
         prdContentEl.innerHTML = '<div class="error" style="padding:20px;color:var(--text-secondary);">当前页面暂无对应的PRD文档</div>';
@@ -650,6 +857,10 @@ function showPrdEditorMsg(text, isError) {
 }
 
 function enterPrdEditMode() {
+    if (isPrdOverviewPath(prdCurrentPath)) {
+        showPrdToast('“当前版本”由关联 PRD 自动汇总，请在原文页签中编辑', true);
+        return;
+    }
     if (isLocalFileProtocol()) {
         showPrdToast('请通过本地服务器（npm run serve）打开原型后再编辑', true);
         return;
@@ -859,8 +1070,15 @@ function savePrdEdits() {
         wrapPrdTables(contentEl);
         bindPrdContentLinks(contentEl);
         exitPrdEditMode();
-        showPrdToast('已保存', false);
-        return true;
+        var contentOverrides = {};
+        contentOverrides[normalizePrdPath(prdCurrentPath)] = newContent;
+        return preparePrdOverview(prdWorkspaceRootPath || prdCurrentPath, {
+            activateWhenReady: false,
+            contentOverrides: contentOverrides
+        }).then(function() {
+            showPrdToast('已保存', false);
+            return true;
+        });
     }).catch(function(err) {
         showPrdEditorMsg('保存失败：' + err.message, true);
         throw err;

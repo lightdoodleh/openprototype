@@ -548,6 +548,7 @@ function saveVersionHistory() {
 let reviewStatus = loadReviewStatus();
 let versionHistory = loadVersionHistory();
 let activeRow = null;
+let previewLoadRequest = 0;
 
 // ─────────────────────────────────────────────
 //  Sidebar resize
@@ -713,6 +714,18 @@ function loadPreview(path, row) {
   const openBtn = document.getElementById('previewOpenBtn');
 
   const url = path;
+  const requestId = ++previewLoadRequest;
+  const expectedUrl = new URL(url, window.location.href).href;
+  frame.style.visibility = 'hidden';
+  frame.addEventListener('load', function revealLoadedPreview() {
+    if (requestId !== previewLoadRequest) {
+      frame.removeEventListener('load', revealLoadedPreview);
+      return;
+    }
+    if (frame.contentWindow.location.href !== expectedUrl) return;
+    frame.style.visibility = 'visible';
+    frame.removeEventListener('load', revealLoadedPreview);
+  });
   frame.src = url;
   frame.style.display = 'block';
   placeholder.style.display = 'none';
