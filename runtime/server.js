@@ -146,6 +146,178 @@ function handleSavePrd(req, res) {
   });
 }
 
+// ── 树节点创建（文件夹 / 页面）─────────────────────────
+const NAME_SEGMENT_RE = /^[A-Za-z0-9_\-一-龥]+$/;
+
+function assertValidSegment(name, label) {
+  if (!NAME_SEGMENT_RE.test(String(name || ''))) {
+    throw new Error(`${label}只能包含中文、字母、数字、下划线或短横线`);
+  }
+}
+
+/** base 必须是已注册产品的入口目录（nav-tree.json 所在目录） */
+function resolveProductRootDir(basePath) {
+  const resolved = path.resolve(ROOT_DIR, '.' + String(basePath || '').replace(/\/+$/, ''));
+  const root = AGENT_WRITE_ROOTS.find((dir) => dir === resolved);
+  if (!root) throw new Error('base 必须是已注册产品的入口目录（见 proto-kit.config.json）');
+  return root;
+}
+
+function resolveParentDir(rootDir, parent) {
+  const relParent = String(parent || '').replace(/^\/+|\/+$/g, '');
+  if (!relParent) return { dir: rootDir, rel: '' };
+  const segments = relParent.split('/');
+  segments.forEach((seg) => assertValidSegment(seg, '父目录名'));
+  const dir = path.join(rootDir, ...segments);
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new Error('父目录不存在');
+  return { dir, rel: segments.join('/') };
+}
+
+function compareNavNodes(a, b) {
+  const aIsFolder = !!a.children;
+  const bIsFolder = !!b.children;
+  if (aIsFolder !== bIsFolder) return aIsFolder ? -1 : 1;
+  return (a.name || a.file).localeCompare(b.name || b.file, 'zh-Hans-CN');
+}
+
+function loadNavTree(rootDir) {
+  const file = path.join(rootDir, 'nav-tree.json');
+  if (!fs.existsSync(file)) return [];
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
+function saveNavTree(rootDir, tree) {
+  fs.writeFileSync(path.join(rootDir, 'nav-tree.json'), JSON.stringify(tree, null, 2) + '\n');
+}
+
+/** 沿 relParent 逐级找到（必要时创建）文件夹节点，返回其 children 数组 */
+function ensureNavFolder(tree, relParent) {
+  let level = tree;
+  if (!relParent) return level;
+  for (const name of relParent.split('/')) {
+    let node = level.find((n) => n.children && n.name === name);
+    if (!node) {
+      node = { name, children: [] };
+      level.push(node);
+      level.sort(compareNavNodes);
+    }
+    level = node.children;
+  }
+  return level;
+}
+
+function todayString() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+function buildPageStub(title) {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${title}</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  font-size: 13px; color: #20242d; background: #f3f5f8; padding: 20px;
+}
+.page-title { font-size: 18px; font-weight: 600; margin: 0 0 16px; }
+.panel { background: #fff; border: 1px solid #e6ebf2; border-radius: 8px; padding: 20px; }
+.placeholder { color: #7b8495; margin: 0; }
+</style>
+</head>
+<body>
+<h1 class="page-title">${title}</h1>
+<div class="panel">
+  <p class="placeholder">「${title}」原型待完善：可直接编辑本文件，或在导航页选中该页面后通过右侧 Agent 生成内容。</p>
+</div>
+</body>
+</html>
+`;
+}
+
+function buildPrdStub(title, fileName) {
+  return `# ${title} PRD
+
+## 一、页面信息
+
+| 项 | 内容 |
+|----|------|
+| 页面名称 | ${title} |
+| 页面文件 | ${fileName} |
+
+## 二、需求说明
+
+（待补充）
+
+## 修订记录
+
+| 版本 | 日期 | 修订人 | 说明 |
+|------|------|--------|------|
+| V1.0.0 | ${todayString()} | | 新建页面 |
+`;
+}
+
+function handleCreateFolder(req, res) {
+  readJsonBody(req, 32 * 1024, (parseErr, data) => {
+    try {
+      if (parseErr) throw parseErr;
+      const rootDir = resolveProductRootDir(data.base);
+      const { dir: parentDir, rel: parentRel } = resolveParentDir(rootDir, data.parent);
+      const name = String(data.name || '').trim();
+      assertValidSegment(name, '文件夹名');
+      const dir = path.join(parentDir, name);
+      if (fs.existsSync(dir)) throw new Error('同名文件或文件夹已存在');
+      fs.mkdirSync(dir);
+      const relPath = parentRel ? `${parentRel}/${name}` : name;
+      const tree = loadNavTree(rootDir);
+      ensureNavFolder(tree, relPath);
+      saveNavTree(rootDir, tree);
+      console.log(`[200] POST /api/create-folder -> ${dir}`);
+      sendJson(res, 200, { ok: true, path: relPath });
+    } catch (err) {
+      console.log(`[400] POST /api/create-folder -> ${err.message}`);
+      sendJson(res, 400, { ok: false, error: err.message });
+    }
+  });
+}
+
+function handleCreatePage(req, res) {
+  readJsonBody(req, 64 * 1024, (parseErr, data) => {
+    try {
+      if (parseErr) throw parseErr;
+      const rootDir = resolveProductRootDir(data.base);
+      const { dir: parentDir, rel: parentRel } = resolveParentDir(rootDir, data.parent);
+      const name = String(data.name || '').trim().replace(/\.html$/i, '');
+      assertValidSegment(name, '页面名');
+      const title = String(data.title || '').trim() || name;
+      const htmlFile = path.join(parentDir, `${name}.html`);
+      const mdFile = path.join(parentDir, `${name}.md`);
+      if (fs.existsSync(htmlFile)) throw new Error('同名页面已存在');
+      fs.writeFileSync(htmlFile, buildPageStub(title));
+      if (!fs.existsSync(mdFile)) fs.writeFileSync(mdFile, buildPrdStub(title, `${name}.html`));
+      const relPath = (parentRel ? `${parentRel}/` : '') + `${name}.html`;
+      const tree = loadNavTree(rootDir);
+      const children = ensureNavFolder(tree, parentRel);
+      if (!children.some((n) => n.file === `${name}.html`)) {
+        children.push({ file: `${name}.html`, path: relPath });
+        children.sort(compareNavNodes);
+      }
+      saveNavTree(rootDir, tree);
+      console.log(`[200] POST /api/create-page -> ${htmlFile}`);
+      sendJson(res, 200, { ok: true, path: relPath });
+    } catch (err) {
+      console.log(`[400] POST /api/create-page -> ${err.message}`);
+      sendJson(res, 400, { ok: false, error: err.message });
+    }
+  });
+}
+
 // ── PRD 标红提取 ───────────────────────────────────────
 function normalizeRedMarkedContent(text) {
   return String(text || '')
@@ -615,6 +787,8 @@ const server = http.createServer(async (req, res) => {
   if (await handleAgentApi(req, res, urlPath)) return;
 
   if (req.method === 'POST' && urlPath === '/api/save-prd') return requireLoopback(req, res) && handleSavePrd(req, res);
+  if (req.method === 'POST' && urlPath === '/api/create-folder') return requireLoopback(req, res) && handleCreateFolder(req, res);
+  if (req.method === 'POST' && urlPath === '/api/create-page') return requireLoopback(req, res) && handleCreatePage(req, res);
   if (req.method === 'POST' && urlPath === '/api/build-update-page-prompt') return requireLoopback(req, res) && handleBuildUpdatePagePrompt(req, res);
   if (req.method === 'POST' && urlPath === '/api/update-page-from-prd') return requireLoopback(req, res) && handleUpdatePageFromPrd(req, res);
 

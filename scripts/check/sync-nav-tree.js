@@ -31,19 +31,22 @@ function collectRegisteredPaths(nodes, out) {
 }
 
 function listDiskPaths(dir) {
-  const out = [];
+  const files = [];
+  const dirs = [];
   const walk = (p) => {
     for (const name of fs.readdirSync(p)) {
+      if (name.startsWith('.')) continue; // 隐藏目录 / 文件不进导航树
       const full = path.join(p, name);
       if (fs.statSync(full).isDirectory()) {
+        dirs.push(path.relative(dir, full).split(path.sep).join('/'));
         walk(full);
       } else if (name.endsWith('.html') && full !== path.join(dir, 'index.html')) {
-        out.push(path.relative(dir, full).split(path.sep).join('/'));
+        files.push(path.relative(dir, full).split(path.sep).join('/'));
       }
     }
   };
   walk(dir);
-  return out.sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
+  return { files: files.sort((a, b) => a.localeCompare(b, 'zh-Hans-CN')), dirs };
 }
 
 function ensureFolderChildren(tree, folderNames) {
@@ -72,8 +75,10 @@ function sortTree(nodes) {
   return nodes;
 }
 
-function buildTree(paths) {
+function buildTree(paths, dirs) {
   const tree = [];
+  // 先登记磁盘上的所有目录（含空目录，保住导航页刚创建、还没放页面的文件夹）
+  for (const relDir of dirs || []) ensureFolderChildren(tree, relDir.split('/'));
   for (const relPath of paths) {
     const segments = relPath.split('/');
     const fileName = segments.pop();
@@ -88,9 +93,9 @@ function syncTarget(target) {
     ? JSON.parse(fs.readFileSync(target.treePath, 'utf8'))
     : [];
   const previous = collectRegisteredPaths(previousTree, new Set());
-  const diskPaths = listDiskPaths(target.dir);
+  const { files: diskPaths, dirs } = listDiskPaths(target.dir);
   const onDisk = new Set(diskPaths);
-  const tree = buildTree(diskPaths);
+  const tree = buildTree(diskPaths, dirs);
   const next = collectRegisteredPaths(tree, new Set());
   const added = [...next].filter((p) => !previous.has(p));
   const removed = [...previous].filter((p) => !onDisk.has(p));

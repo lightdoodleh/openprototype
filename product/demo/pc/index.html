@@ -285,6 +285,29 @@ body.is-resizing-sidebar .preview-frame {
 .folder.collapsed > .folder-head .folder-arrow { transform: rotate(-90deg); }
 .folder-icon { color: #f5a400; flex-shrink: 0; }
 .folder-icon svg { width: 13px; height: 13px; fill: currentColor; display: block; }
+.folder-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tree-add-btn {
+  flex-shrink: 0;
+  height: 17px;
+  padding: 0 4px;
+  border: 1px solid #d8dfe9;
+  border-radius: 3px;
+  background: #fff;
+  color: #8a94a6;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 15px;
+  cursor: pointer;
+  visibility: hidden;
+}
+.folder-head:hover .tree-add-btn { visibility: visible; }
+.tree-add-btn:hover { border-color: #1677ff; color: #1677ff; background: #f0f5ff; }
 
 /* ── File row ── */
 .file-row {
@@ -403,6 +426,43 @@ body.is-resizing-sidebar .preview-frame {
 }
 .toast.show { opacity: 1; }
 
+/* ── Create modal ── */
+.create-modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+.create-modal-mask.show { display: flex; }
+.create-modal {
+  width: 320px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
+  padding: 16px;
+}
+.create-modal-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.create-modal-location { font-size: 11px; color: #7b8495; margin-bottom: 12px; word-break: break-all; }
+.create-modal-field { margin-bottom: 10px; }
+.create-modal-field label { display: block; font-size: 11px; color: #4f5665; margin-bottom: 4px; }
+.create-modal-field input {
+  width: 100%;
+  border: 1px solid #dfe5ee;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: #20242d;
+  outline: none;
+}
+.create-modal-field input:focus { border-color: #1677ff; }
+.create-modal-error { font-size: 11px; color: #d91f2f; min-height: 15px; margin-bottom: 6px; }
+.create-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.create-modal-actions .btn { padding: 4px 14px; font-size: 12px; }
+.create-modal-actions .btn-primary { margin-left: 0; }
+
 /* ── Version badge ── */
 .version-badge {
   flex-shrink: 0;
@@ -482,6 +542,8 @@ body.is-resizing-sidebar .preview-frame {
       </label>
       <button class="btn" id="expandAllBtn">全部展开</button>
       <button class="btn" id="collapseAllBtn">全部折叠</button>
+      <button class="btn" id="newFolderBtn">新建文件夹</button>
+      <button class="btn" id="newPageBtn">新建页面</button>
     </div>
   </div>
 
@@ -500,6 +562,27 @@ body.is-resizing-sidebar .preview-frame {
     <p>← 点击左侧页面预览</p>
   </div>
   <iframe class="preview-frame" id="previewFrame" style="display:none"></iframe>
+</div>
+
+<!-- ═══ CREATE MODAL ═══ -->
+<div class="create-modal-mask" id="createModalMask">
+  <div class="create-modal" role="dialog" aria-modal="true" aria-labelledby="createModalTitle">
+    <div class="create-modal-title" id="createModalTitle">新建页面</div>
+    <div class="create-modal-location" id="createModalLocation"></div>
+    <div class="create-modal-field">
+      <label for="createNameInput">名称（作为文件 / 目录名，支持中文、字母、数字、_ 和 -）</label>
+      <input id="createNameInput" type="text" placeholder="如 order_list" autocomplete="off">
+    </div>
+    <div class="create-modal-field" id="createTitleField">
+      <label for="createTitleInput">页面标题（可选，用于页面 &lt;title&gt; 与 PRD）</label>
+      <input id="createTitleInput" type="text" placeholder="如 订单列表" autocomplete="off">
+    </div>
+    <div class="create-modal-error" id="createModalError"></div>
+    <div class="create-modal-actions">
+      <button class="btn" id="createCancelBtn" type="button">取消</button>
+      <button class="btn btn-primary" id="createConfirmBtn" type="button">创建</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -918,7 +1001,7 @@ function applyTitleSearch() {
 // ─────────────────────────────────────────────
 let totalCount = 0;
 
-function renderNodes(nodes, depth) {
+function renderNodes(nodes, depth, trail) {
   const wrap = document.createElement('div');
   wrap.style.paddingLeft = depth === 0 ? '0' : '14px';
 
@@ -953,17 +1036,25 @@ function renderNodes(nodes, depth) {
 
       wrap.appendChild(row);
     } else {
+      const folderKey = trail ? trail + '/' + node.name : node.name;
       const folder = document.createElement('div');
       folder.className = 'folder';
       folder.dataset.searchText = node.name;
+      folder.dataset.pathKey = folderKey;
 
       const head = document.createElement('div');
       head.className = 'folder-head';
-      head.innerHTML = `<span class="folder-arrow">${I_ARROW}</span><span class="folder-icon">${I_FOLDER}</span><span>${node.name}</span>`;
+      head.innerHTML = `<span class="folder-arrow">${I_ARROW}</span><span class="folder-icon">${I_FOLDER}</span><span class="folder-name">${node.name}</span><button type="button" class="tree-add-btn" data-create="page" title="在此文件夹新建页面">＋页</button><button type="button" class="tree-add-btn" data-create="folder" title="在此文件夹新建子文件夹">＋夹</button>`;
       head.addEventListener('click', () => folder.classList.toggle('collapsed'));
+      head.querySelectorAll('.tree-add-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          openCreateModal(btn.dataset.create, folderKey);
+        });
+      });
 
       folder.appendChild(head);
-      folder.appendChild(renderNodes(node.children || [], depth + 1));
+      folder.appendChild(renderNodes(node.children || [], depth + 1, folderKey));
       folder.classList.add('folder-children-wrap');
 
       // wrap children into .folder-children div for collapse
@@ -975,6 +1066,100 @@ function renderNodes(nodes, depth) {
     }
   });
   return wrap;
+}
+
+// 重建整棵树；重渲染时保留折叠状态与当前选中页
+function renderTree() {
+  const treeWrap = document.getElementById('sidebarTree');
+  const collapsedKeys = new Set(
+    Array.from(treeWrap.querySelectorAll('.folder.collapsed')).map(f => f.dataset.pathKey)
+  );
+  const activePath = activeRow ? activeRow.dataset.path : '';
+  totalCount = 0;
+  Object.keys(breadcrumbMap).forEach(key => delete breadcrumbMap[key]);
+  buildBreadcrumbs(TREE, '');
+  treeWrap.replaceChildren(renderNodes(TREE, 0, ''));
+  treeWrap.querySelectorAll('.folder').forEach(f => {
+    if (collapsedKeys.has(f.dataset.pathKey)) f.classList.add('collapsed');
+  });
+  activeRow = null;
+  if (activePath) {
+    const row = treeWrap.querySelector(`.file-row[data-path="${CSS.escape(activePath)}"]`);
+    if (row) { row.classList.add('active'); activeRow = row; }
+  }
+  document.getElementById('totalCount').textContent = totalCount;
+  applyTitleSearch();
+  updateStats();
+}
+
+// ─────────────────────────────────────────────
+//  Create folder / page
+// ─────────────────────────────────────────────
+const PAGE_BASE = decodeURIComponent(new URL('.', window.location.href).pathname).replace(/\/$/, '');
+let createModalState = null;
+
+function openCreateModal(type, parentPath) {
+  createModalState = { type, parentPath: parentPath || '' };
+  document.getElementById('createModalTitle').textContent = type === 'folder' ? '新建文件夹' : '新建页面';
+  document.getElementById('createModalLocation').textContent = '位置：' + (parentPath ? parentPath + '/' : '根目录');
+  document.getElementById('createTitleField').style.display = type === 'page' ? '' : 'none';
+  document.getElementById('createNameInput').value = '';
+  document.getElementById('createTitleInput').value = '';
+  document.getElementById('createModalError').textContent = '';
+  document.getElementById('createModalMask').classList.add('show');
+  document.getElementById('createNameInput').focus();
+}
+
+function closeCreateModal() {
+  createModalState = null;
+  document.getElementById('createModalMask').classList.remove('show');
+}
+
+function expandFolderTrail(key) {
+  document.querySelectorAll('.folder').forEach(f => {
+    const k = f.dataset.pathKey || '';
+    if (k === key || key.startsWith(k + '/')) f.classList.remove('collapsed');
+  });
+}
+
+async function submitCreateModal() {
+  if (!createModalState) return;
+  const { type, parentPath } = createModalState;
+  const errorEl = document.getElementById('createModalError');
+  const name = document.getElementById('createNameInput').value.trim();
+  if (!name) { errorEl.textContent = '请输入名称'; return; }
+  if (!/^[\w一-龥-]+$/.test(name)) {
+    errorEl.textContent = '名称只能包含中文、字母、数字、下划线或短横线';
+    return;
+  }
+  const confirmBtn = document.getElementById('createConfirmBtn');
+  confirmBtn.disabled = true;
+  errorEl.textContent = '';
+  try {
+    const payload = { base: PAGE_BASE, parent: parentPath, name };
+    if (type === 'page') payload.title = document.getElementById('createTitleInput').value.trim();
+    const res = await fetch(type === 'folder' ? '/api/create-folder' : '/api/create-page', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || '创建失败：' + res.status);
+    closeCreateModal();
+    await loadTree();
+    renderTree();
+    if (parentPath) expandFolderTrail(parentPath);
+    showToast((type === 'folder' ? '文件夹已创建：' : '页面已创建：') + data.path);
+    if (type === 'page') {
+      const row = document.querySelector(`.file-row[data-path="${CSS.escape(data.path)}"]`);
+      if (row) loadPreview(data.path, row);
+    }
+    fetchAllVersions();
+  } catch (err) {
+    errorEl.textContent = err.message;
+  } finally {
+    confirmBtn.disabled = false;
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -1017,8 +1202,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('sidebarTree').textContent = '页面树加载失败：' + e.message;
     return;
   }
-  buildBreadcrumbs(TREE, '');
-
   const savedVer = navStorage.getItem(VERSION_KEY);
   if (savedVer) document.getElementById('versionInput').value = savedVer;
   const versionInput = document.getElementById('versionInput');
@@ -1038,9 +1221,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('navSearchInput').addEventListener('input', applyTitleSearch);
 
   const treeWrap = document.getElementById('sidebarTree');
-  treeWrap.appendChild(renderNodes(TREE, 0));
-  document.getElementById('totalCount').textContent = totalCount;
-  updateStats();
+  renderTree();
 
   // version filter: re-evaluate all badges on input change
   document.getElementById('versionInput').addEventListener('input', () => {
@@ -1069,6 +1250,21 @@ window.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('copyAddressBtn').addEventListener('click', () => {
     copyText(window.location.href, '本页地址已复制到剪贴板');
+  });
+
+  // 新建文件夹 / 页面
+  document.getElementById('newFolderBtn').addEventListener('click', () => openCreateModal('folder', ''));
+  document.getElementById('newPageBtn').addEventListener('click', () => openCreateModal('page', ''));
+  document.getElementById('createCancelBtn').addEventListener('click', closeCreateModal);
+  document.getElementById('createConfirmBtn').addEventListener('click', submitCreateModal);
+  document.getElementById('createModalMask').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeCreateModal();
+  });
+  [document.getElementById('createNameInput'), document.getElementById('createTitleInput')].forEach(input => {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); submitCreateModal(); }
+      else if (e.key === 'Escape') closeCreateModal();
+    });
   });
 
 });
