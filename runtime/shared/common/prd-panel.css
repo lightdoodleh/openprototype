@@ -57,6 +57,12 @@
 .prd-slide-panel.open {
     transform: translateX(0);
 }
+/* 样式注入完成的那一帧，transform 会从 none 变为 translateX(100%)。若此时过渡已生效，
+   面板会先整块出现在右侧再滑出去。prd-panel.js 在首帧挂上该类屏蔽过渡，之后再移除。 */
+.prd-float-btn.prd-panel-no-anim,
+.prd-slide-panel.prd-panel-no-anim {
+    transition: none;
+}
 .prd-panel-resizer {
     position: absolute;
     left: -3px;

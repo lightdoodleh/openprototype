@@ -18,19 +18,56 @@ var PRD_PANEL_MAX_RATIO = 0.86;
 // 记录本文件自身的 <script src>，用于定位同目录的 prd-panel.css 并自动注入
 var PRD_PANEL_SCRIPT_SRC = document.currentScript ? document.currentScript.getAttribute('src') : '';
 
+var PRD_PANEL_NO_ANIM_CLASS = 'prd-panel-no-anim';
+
 function arePrdPanelStylesReady() {
     var link = document.getElementById('prdPanelStyles');
     return !!(link && link.sheet);
 }
 
+function getPrdPanelChromeElements() {
+    return ['prdFloatBtn', 'prdPanel'].map(function(id) {
+        return document.getElementById(id);
+    }).filter(Boolean);
+}
+
+// 样式就绪前先禁用过渡：注入 prd-panel.css 的那一帧 transform 由 none 变为 translateX(100%)，
+// 过渡若已生效，浏览器会把这次变化当成动画播放，面板就会闪现在右侧再滑走。
+function preparePrdPanelChrome(element) {
+    if (!element) return;
+    element.classList.add(PRD_PANEL_NO_ANIM_CLASS);
+    hidePrdPanelUntilStylesReady(element);
+}
+
+function restorePrdPanelAnimation() {
+    var pending = getPrdPanelChromeElements().filter(function(element) {
+        return element.classList.contains(PRD_PANEL_NO_ANIM_CLASS);
+    });
+    if (!pending.length) return;
+
+    var restore = function() {
+        pending.forEach(function(element) {
+            // 先读一次布局，确保初始 transform 在过渡恢复前已落定，否则恢复过渡时仍会补出动画
+            element.getBoundingClientRect();
+            element.classList.remove(PRD_PANEL_NO_ANIM_CLASS);
+        });
+    };
+
+    if (window.requestAnimationFrame) {
+        window.requestAnimationFrame(restore);
+    } else {
+        setTimeout(restore, 0);
+    }
+}
+
 function revealPrdPanelDom() {
-    ['prdFloatBtn', 'prdPanel'].forEach(function(id) {
-        var element = document.getElementById(id);
-        if (element && element.dataset.prdPanelPending === 'true') {
+    getPrdPanelChromeElements().forEach(function(element) {
+        if (element.dataset.prdPanelPending === 'true') {
             element.style.visibility = '';
             delete element.dataset.prdPanelPending;
         }
     });
+    restorePrdPanelAnimation();
 }
 
 function hidePrdPanelUntilStylesReady(element) {
@@ -40,17 +77,23 @@ function hidePrdPanelUntilStylesReady(element) {
 }
 
 function ensurePrdPanelStyles() {
-    var existingLink = document.getElementById('prdPanelStyles');
-    if (existingLink) return existingLink;
-    var href = PRD_PANEL_SCRIPT_SRC
-        ? PRD_PANEL_SCRIPT_SRC.replace(/prd-panel\.js(?:\?.*)?$/, 'prd-panel.css')
-        : 'common/prd-panel.css';
-    var link = document.createElement('link');
-    link.id = 'prdPanelStyles';
-    link.rel = 'stylesheet';
-    link.href = href;
-    link.addEventListener('load', revealPrdPanelDom);
-    document.head.appendChild(link);
+    var link = document.getElementById('prdPanelStyles');
+    if (!link) {
+        var href = PRD_PANEL_SCRIPT_SRC
+            ? PRD_PANEL_SCRIPT_SRC.replace(/prd-panel\.js(?:\?.*)?$/, 'prd-panel.css')
+            : 'common/prd-panel.css';
+        link = document.createElement('link');
+        link.id = 'prdPanelStyles';
+        link.rel = 'stylesheet';
+        link.href = href;
+        document.head.appendChild(link);
+    }
+    // 已存在的 link 也要绑定：样式可能由页面自己引入，此时同样需要在加载完成后揭示面板
+    if (link.dataset.prdPanelBound !== 'true') {
+        link.dataset.prdPanelBound = 'true';
+        link.addEventListener('load', revealPrdPanelDom);
+        link.addEventListener('error', revealPrdPanelDom);
+    }
     return link;
 }
 
@@ -138,18 +181,23 @@ function ensurePrdPanelDom() {
         prdFloatBtn.id = 'prdFloatBtn';
         prdFloatBtn.className = 'prd-float-btn';
         prdFloatBtn.textContent = 'PRD';
-        hidePrdPanelUntilStylesReady(prdFloatBtn);
+        preparePrdPanelChrome(prdFloatBtn);
         document.body.appendChild(prdFloatBtn);
     }
 
     var prdPanel = document.getElementById('prdPanel');
     if (!prdPanel) {
         prdPanel = document.createElement('div');
-        hidePrdPanelUntilStylesReady(prdPanel);
+        preparePrdPanelChrome(prdPanel);
         document.body.appendChild(prdPanel);
     }
 
-    return ensurePrdPanelStructure(prdPanel);
+    var structuredPanel = ensurePrdPanelStructure(prdPanel);
+    // 样式已就绪（多为缓存命中）时 link 的 load 不会再触发，这里直接恢复过渡
+    if (arePrdPanelStylesReady()) {
+        revealPrdPanelDom();
+    }
+    return structuredPanel;
 }
 
 function initPrdPanel() {
@@ -1263,6 +1311,11 @@ function renderMarkdownToHtml(markdown) {
     html = html.replace(/\n/g, '<br>');
     
     return html;
+}
+
+// 解析到本脚本就开始下载样式，而不是等到 DOMContentLoaded，尽量让样式先于面板建好
+if (document.head) {
+    ensurePrdPanelStyles();
 }
 
 if (document.readyState === 'loading') {
