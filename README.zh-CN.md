@@ -17,8 +17,9 @@
 
 </div>
 
-<p align="center">
-  <img src="image/README/workbench-overview.png" alt="openprototype 工作台预览" width="1100">
+<p align="center" style="display: flex; justify-content: center; gap: 24px;">
+  <img src="image/README/workbench-overview.png" alt="openprototype workbench preview" width="520" style="border: 1px solid #bbb; border-radius: 8px;">
+  <img src="image/README/workbench-prd.png" alt="openprototype workbench prd preview" width="520" style="border: 1px solid #bbb; border-radius: 8px;">
 </p>
 
 ---
