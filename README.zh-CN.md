@@ -17,12 +17,13 @@
 
 </div>
 
-<p align="center" style="display: flex; justify-content: center; gap: 24px;">
-  <img src="image/README/workbench-overview.png" alt="openprototype workbench preview" width="520" style="border: 1px solid #bbb; border-radius: 8px;">
-  <img src="image/README/workbench-prd.png" alt="openprototype workbench prd preview" width="520" style="border: 1px solid #bbb; border-radius: 8px;">
-</p>
+<table>
+  <tr>
+    <td><img src="image/README/workbench-overview.png" alt="openprototype workbench preview" width="440"></td>
+    <td><img src="image/README/workbench-prd.png" alt="openprototype workbench prd preview" width="440"></td>
+  </tr>
+</table>
 
----
 
 ## 为什么要有它
 

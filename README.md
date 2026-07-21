@@ -23,7 +23,7 @@ Let product managers run "requirements → PRD → HTML prototype" as a single c
     <td><img src="image/README/workbench-prd.png" alt="openprototype workbench prd preview" width="440"></td>
   </tr>
 </table>
----
+
 
 ## Why it exists
 
