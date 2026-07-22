@@ -70,3 +70,18 @@ jobs:
           name: smoke-screenshots
           path: scripts/check/_screenshots/
           if-no-files-found: ignore
+
+  service:
+    name: 常驻服务冒烟（${{ matrix.os }}）
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: npm 安装后注册 / 健康检查 / 崩溃恢复 / 生命周期
+        run: node scripts/check/service-smoke-test.js

@@ -4,7 +4,8 @@
  */
 
 // 页面可在引入本模块前声明这些全局以覆盖默认行为；未声明时使用默认值。
-// PRD_OVERVIEW_VERSION 启用“当前版本”虚拟页签，PRD_WORKSPACE_MAP 配置多文档工作区。
+// “当前版本”优先读取主 PRD 历史记录中的最大版本；PRD_OVERVIEW_VERSION 仅作兼容兜底。
+// PRD_WORKSPACE_MAP 配置多文档工作区。
 var PRD_BASE_PATH = typeof PRD_BASE_PATH !== 'undefined' ? PRD_BASE_PATH : './';
 var PRD_FILE_MAP = typeof PRD_FILE_MAP !== 'undefined' ? PRD_FILE_MAP : {};
 var PRD_CACHE = typeof PRD_CACHE !== 'undefined' ? PRD_CACHE : {};
@@ -185,6 +186,11 @@ function ensurePrdPanelDom() {
         document.body.appendChild(prdFloatBtn);
     }
 
+    var legacyPrdBtn = document.getElementById('openPrd');
+    if (legacyPrdBtn) {
+        legacyPrdBtn.style.display = 'none';
+    }
+
     var prdPanel = document.getElementById('prdPanel');
     if (!prdPanel) {
         prdPanel = document.createElement('div');
@@ -212,7 +218,10 @@ function initPrdPanel() {
 
     var prdFloatBtn = document.getElementById('prdFloatBtn');
     if (prdFloatBtn) {
-        prdFloatBtn.addEventListener('click', togglePrdPanel);
+        prdFloatBtn.addEventListener('click', function(event) {
+            event.stopPropagation();
+            togglePrdPanel();
+        });
     }
     
     var prdPanelCloseBtn = document.getElementById('prdPanelCloseBtn');
@@ -331,6 +340,7 @@ var prdWorkspaceTabs = [];
 var prdEditMode = false;
 var prdWorkspaceRootPath = '';
 var prdOverviewMarkdown = '';
+var prdOverviewVersion = '';
 var prdOverviewBuildToken = 0;
 var PRD_OVERVIEW_PATH = './__openprototype_current_version__.md';
 
@@ -424,7 +434,42 @@ function getPrdDisplayName(filePath) {
     return (filePath || '').split('/').pop().replace(/\.md(?:#.*)?$/i, '').replace(/_/g, ' ');
 }
 
-function getPrdOverviewVersion() {
+function comparePrdVersions(left, right) {
+    var leftParts = String(left || '').replace(/^v/i, '').split('.');
+    var rightParts = String(right || '').replace(/^v/i, '').split('.');
+    var length = Math.max(leftParts.length, rightParts.length);
+
+    for (var index = 0; index < length; index += 1) {
+        var leftPart = leftParts[index] || '0';
+        var rightPart = rightParts[index] || '0';
+        var leftNumber = /^\d+$/.test(leftPart) ? Number(leftPart) : null;
+        var rightNumber = /^\d+$/.test(rightPart) ? Number(rightPart) : null;
+        var comparison = leftNumber !== null && rightNumber !== null
+            ? leftNumber - rightNumber
+            : leftPart.localeCompare(rightPart, undefined, { numeric: true, sensitivity: 'base' });
+        if (comparison !== 0) return comparison;
+    }
+    return 0;
+}
+
+function getPrdHistoryMaxVersion(content) {
+    var plainText = String(content || '').replace(/<[^>]+>/g, '');
+    var pattern = /^\|\s*(v\d+(?:\.[0-9a-z]+)+)\s*\|/gim;
+    var versions = [];
+    var match;
+    while ((match = pattern.exec(plainText)) !== null) {
+        versions.push(match[1]);
+    }
+    if (!versions.length) return '';
+    return versions.reduce(function(maxVersion, version) {
+        return comparePrdVersions(version, maxVersion) > 0 ? version : maxVersion;
+    });
+}
+
+function getPrdOverviewVersion(rootContent) {
+    var historyMaxVersion = getPrdHistoryMaxVersion(rootContent);
+    if (historyMaxVersion) return historyMaxVersion;
+    if (prdOverviewVersion) return prdOverviewVersion;
     if (typeof PRD_OVERVIEW_VERSION === 'undefined') return '';
     return String(PRD_OVERVIEW_VERSION || '').trim();
 }
@@ -544,7 +589,7 @@ function buildPrdOverviewMarkdown(tabs, contents, version) {
 }
 
 function renderPrdOverview() {
-    var version = getPrdOverviewVersion();
+    var version = prdOverviewVersion;
     var contentEl = document.getElementById('prdPanelContent');
     var titleEl = document.getElementById('prdPanelTitle');
     var fileNameEl = document.getElementById('prdPanelFileName');
@@ -567,13 +612,17 @@ function renderPrdOverview() {
 
 function preparePrdOverview(rootPath, options) {
     options = options || {};
-    var version = getPrdOverviewVersion();
     var realTabs = prdWorkspaceTabs.filter(function(tab) {
         return !isPrdOverviewPath(tab.path);
     });
     var contentOverrides = options.contentOverrides || {};
     var buildToken = ++prdOverviewBuildToken;
     var normalizedRootPath = normalizePrdPath(rootPath);
+    var rootContent = Object.prototype.hasOwnProperty.call(contentOverrides, normalizedRootPath)
+        ? contentOverrides[normalizedRootPath]
+        : '';
+    var version = getPrdOverviewVersion(rootContent);
+    prdOverviewVersion = version;
 
     if (!version || !realTabs.length) {
         prdOverviewMarkdown = '';
@@ -842,6 +891,7 @@ function updatePrdContent() {
     prdOverviewBuildToken += 1;
     prdWorkspaceRootPath = '';
     prdOverviewMarkdown = '';
+    prdOverviewVersion = '';
     
     if (!prdFileName) {
         prdContentEl.innerHTML = '<div class="error" style="padding:20px;color:var(--text-secondary);">当前页面暂无对应的PRD文档</div>';
