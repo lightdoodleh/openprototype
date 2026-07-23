@@ -28,10 +28,12 @@
   "scripts": {
     "serve": "node runtime/server.js",
     "start": "node runtime/server.js",
+    "postinstall": "node scripts/postinstall.js",
     "check": "node scripts/check/run-checks.js",
     "check:changed": "node scripts/check/run-checks.js --changed",
     "check:static": "node scripts/check/static-check.js",
     "check:smoke": "node scripts/check/smoke-test.js",
+    "check:service": "node scripts/check/service-smoke-test.js",
     "nav:sync": "node scripts/check/sync-nav-tree.js",
     "doctor": "node bin/cli.js doctor",
     "postinstall:browser": "playwright install chromium"

@@ -18,6 +18,11 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { loadConfig } = require('../lib/config');
 
+function resolveArg(name) {
+  const i = process.argv.indexOf(name);
+  return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : '';
+}
+
 function resolvePortArg(fallback) {
   const i = process.argv.indexOf('--port');
   if (i !== -1 && process.argv[i + 1]) return Number(process.argv[i + 1]);
@@ -30,9 +35,15 @@ function resolveHostArg(fallback) {
   return fallback;
 }
 
-let CONFIG = loadConfig();
+const EXPLICIT_ROOT = resolveArg('--root');
+const SERVICE_ID = resolveArg('--service-id') || process.env.OPENPROTOTYPE_SERVICE_ID || '';
+const STARTED_AT = new Date().toISOString();
+let PACKAGE_VERSION = 'unknown';
+try { PACKAGE_VERSION = require('../package.json').version || PACKAGE_VERSION; } catch {}
+
+let CONFIG = loadConfig(EXPLICIT_ROOT || undefined);
 // 当前目录没有 proto-kit.config.json 时（例如直接跑本包自带 demo），回退用本包自己的配置
-if (!CONFIG.hasConfigFile) {
+if (!EXPLICIT_ROOT && !CONFIG.hasConfigFile) {
   const pkgConfig = loadConfig(__dirname);
   if (pkgConfig.hasConfigFile) CONFIG = pkgConfig;
 }
@@ -146,7 +157,7 @@ function handleSavePrd(req, res) {
   });
 }
 
-// ── 树节点创建（文件夹 / 页面）─────────────────────────
+// ── 导航树管理（创建 / 排序）────────────────────
 const NAME_SEGMENT_RE = /^[A-Za-z0-9_\-一-龥]+$/;
 
 function assertValidSegment(name, label) {
@@ -173,13 +184,6 @@ function resolveParentDir(rootDir, parent) {
   return { dir, rel: segments.join('/') };
 }
 
-function compareNavNodes(a, b) {
-  const aIsFolder = !!a.children;
-  const bIsFolder = !!b.children;
-  if (aIsFolder !== bIsFolder) return aIsFolder ? -1 : 1;
-  return (a.name || a.file).localeCompare(b.name || b.file, 'zh-Hans-CN');
-}
-
 function loadNavTree(rootDir) {
   const file = path.join(rootDir, 'nav-tree.json');
   if (!fs.existsSync(file)) return [];
@@ -199,11 +203,33 @@ function ensureNavFolder(tree, relParent) {
     if (!node) {
       node = { name, children: [] };
       level.push(node);
-      level.sort(compareNavNodes);
     }
     level = node.children;
   }
   return level;
+}
+
+function getNavLevel(tree, relParent) {
+  let level = tree;
+  if (!relParent) return level;
+  for (const name of relParent.split('/')) {
+    const node = level.find((item) => item.children && item.name === name);
+    if (!node) throw new Error('导航树中不存在指定父目录');
+    level = node.children;
+  }
+  return level;
+}
+
+function resolveReorderParent(rootDir, parent) {
+  const relParent = String(parent || '').replace(/^\/+|\/+$/g, '');
+  const dir = path.resolve(rootDir, ...relParent.split('/').filter(Boolean));
+  if (dir !== rootDir && !dir.startsWith(rootDir + path.sep)) throw new Error('父目录超出产品范围');
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new Error('父目录不存在');
+  return relParent;
+}
+
+function navNodeKey(node) {
+  return node.file ? `file:${node.file}` : `folder:${node.name}`;
 }
 
 function todayString() {
@@ -306,13 +332,42 @@ function handleCreatePage(req, res) {
       const children = ensureNavFolder(tree, parentRel);
       if (!children.some((n) => n.file === `${name}.html`)) {
         children.push({ file: `${name}.html`, path: relPath });
-        children.sort(compareNavNodes);
       }
       saveNavTree(rootDir, tree);
       console.log(`[200] POST /api/create-page -> ${htmlFile}`);
       sendJson(res, 200, { ok: true, path: relPath });
     } catch (err) {
       console.log(`[400] POST /api/create-page -> ${err.message}`);
+      sendJson(res, 400, { ok: false, error: err.message });
+    }
+  });
+}
+
+function handleReorderNav(req, res) {
+  readJsonBody(req, 64 * 1024, (parseErr, data) => {
+    try {
+      if (parseErr) throw parseErr;
+      const rootDir = resolveProductRootDir(data.base);
+      const parentRel = resolveReorderParent(rootDir, data.parent);
+      const orderedKeys = Array.isArray(data.orderedKeys) ? data.orderedKeys.map(String) : [];
+      const tree = loadNavTree(rootDir);
+      const level = getNavLevel(tree, parentRel);
+      const currentKeys = level.map(navNodeKey);
+      const uniqueKeys = new Set(orderedKeys);
+      if (
+        orderedKeys.length !== currentKeys.length ||
+        uniqueKeys.size !== orderedKeys.length ||
+        currentKeys.some((key) => !uniqueKeys.has(key))
+      ) {
+        throw new Error('排序节点与当前导航树不一致，请刷新后重试');
+      }
+      const nodesByKey = new Map(level.map((node) => [navNodeKey(node), node]));
+      level.splice(0, level.length, ...orderedKeys.map((key) => nodesByKey.get(key)));
+      saveNavTree(rootDir, tree);
+      console.log(`[200] POST /api/reorder-nav -> ${rootDir} (${parentRel || '根目录'})`);
+      sendJson(res, 200, { ok: true });
+    } catch (err) {
+      console.log(`[400] POST /api/reorder-nav -> ${err.message}`);
       sendJson(res, 400, { ok: false, error: err.message });
     }
   });
@@ -784,11 +839,24 @@ const server = http.createServer(async (req, res) => {
     return res.end('Bad Request');
   }
 
+  if (req.method === 'GET' && urlPath === '/api/health') {
+    if (!requireLoopback(req, res)) return;
+    return sendJson(res, 200, {
+      ok: true,
+      serviceId: SERVICE_ID,
+      version: PACKAGE_VERSION,
+      pid: process.pid,
+      port: PORT,
+      startedAt: STARTED_AT
+    });
+  }
+
   if (await handleAgentApi(req, res, urlPath)) return;
 
   if (req.method === 'POST' && urlPath === '/api/save-prd') return requireLoopback(req, res) && handleSavePrd(req, res);
   if (req.method === 'POST' && urlPath === '/api/create-folder') return requireLoopback(req, res) && handleCreateFolder(req, res);
   if (req.method === 'POST' && urlPath === '/api/create-page') return requireLoopback(req, res) && handleCreatePage(req, res);
+  if (req.method === 'POST' && urlPath === '/api/reorder-nav') return requireLoopback(req, res) && handleReorderNav(req, res);
   if (req.method === 'POST' && urlPath === '/api/build-update-page-prompt') return requireLoopback(req, res) && handleBuildUpdatePagePrompt(req, res);
   if (req.method === 'POST' && urlPath === '/api/update-page-from-prd') return requireLoopback(req, res) && handleUpdatePageFromPrd(req, res);
 
@@ -814,7 +882,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') console.error(`端口 ${PORT} 已被占用，请先关闭相关进程或改 proto-kit.config.json 的 port。`);
+  if (err.code === 'EADDRINUSE') console.error(`端口 ${PORT} 已被占用。若常驻服务已启动，请使用 openprototype service status；否则请关闭占用进程或修改 proto-kit.config.json。`);
   else console.error('服务器错误:', err);
   process.exit(1);
 });

@@ -75,6 +75,34 @@ function sortTree(nodes) {
   return nodes;
 }
 
+function nodeKey(node) {
+  return node.file ? `file:${node.file}` : `folder:${node.name}`;
+}
+
+/** 保留 nav-tree.json 中的人工顺序，仅把磁盘新增节点按默认顺序追加到同级末尾。 */
+function preserveTreeOrder(nodes, previousNodes) {
+  const currentByKey = new Map(nodes.map((node) => [nodeKey(node), node]));
+  const previousByKey = new Map((previousNodes || []).map((node) => [nodeKey(node), node]));
+  const ordered = [];
+
+  (previousNodes || []).forEach((previousNode) => {
+    const node = currentByKey.get(nodeKey(previousNode));
+    if (!node) return;
+    ordered.push(node);
+    currentByKey.delete(nodeKey(previousNode));
+  });
+  nodes.forEach((node) => {
+    if (currentByKey.has(nodeKey(node))) ordered.push(node);
+  });
+
+  ordered.forEach((node) => {
+    if (!node.children) return;
+    const previousNode = previousByKey.get(nodeKey(node));
+    node.children = preserveTreeOrder(node.children, previousNode && previousNode.children);
+  });
+  return ordered;
+}
+
 function buildTree(paths, dirs) {
   const tree = [];
   // 先登记磁盘上的所有目录（含空目录，保住导航页刚创建、还没放页面的文件夹）
@@ -95,7 +123,7 @@ function syncTarget(target) {
   const previous = collectRegisteredPaths(previousTree, new Set());
   const { files: diskPaths, dirs } = listDiskPaths(target.dir);
   const onDisk = new Set(diskPaths);
-  const tree = buildTree(diskPaths, dirs);
+  const tree = preserveTreeOrder(buildTree(diskPaths, dirs), previousTree);
   const next = collectRegisteredPaths(tree, new Set());
   const added = [...next].filter((p) => !previous.has(p));
   const removed = [...previous].filter((p) => !onDisk.has(p));

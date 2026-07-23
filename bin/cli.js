@@ -8,6 +8,7 @@
  *   openprototype init                  把框架植入当前已有项目（场景②，非破坏式）
  *   openprototype add-product <id>      新增一个产品壳（默认 pc）
  *   openprototype serve                 启动本地服务器
+ *   openprototype service <action>      管理本地常驻服务
  *   openprototype check [--changed]     跑自动化检查
  *   openprototype nav:sync              重建各产品 nav-tree.json
  *   openprototype doctor                体检：Node / OpenCode / 配置 / Playwright
@@ -18,6 +19,16 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { detectOpenCodeBin, CONFIG_FILENAME, DEFAULTS } = require('../lib/config');
+const {
+  installService,
+  startService,
+  stopService,
+  uninstallService,
+  pruneServices,
+  serviceStatus,
+  readLog,
+  isSupportedPlatform
+} = require('../lib/service-manager');
 
 const PKG_ROOT = path.resolve(__dirname, '..');
 const TPL = path.join(PKG_ROOT, 'templates');
@@ -135,6 +146,7 @@ function cmdCreate(argv) {
       'check:changed': 'openprototype check --changed',
       'nav:sync': 'openprototype nav:sync'
     },
+    allowScripts: { openprototype: true },
     dependencies: { 'openprototype': kitDependencySpec() }
   };
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
@@ -147,13 +159,15 @@ function cmdCreate(argv) {
   info(C.g('\n✔ 项目已创建。下一步：\n'));
   info(`  cd ${dir}`);
   info('  npm install');
-  info('  npm run serve      ' + C.dim('# 打开 http://127.0.0.1:8082/product/demo/pc/index.html'));
+  info('  ' + C.dim('# npm 安装后会自动启动常驻服务'));
+  info('  浏览器打开 http://127.0.0.1:8082/product/demo/pc/index.html');
   info('\n  ' + C.dim('（右侧 AI 面板需要本机安装 OpenCode，npm install 后运行 npx openprototype doctor 检查）\n'));
 }
 
 // ── 命令：init（植入已有项目） ──────────────────────────
-function cmdInit() {
+async function cmdInit() {
   const root = process.cwd();
+  let serviceInstallDenied = false;
   info(C.b('\n把 openprototype 植入当前项目（非破坏式）…\n'));
 
   copyIfAbsent(path.join(TPL, 'skills'), path.join(root, 'skills'));
@@ -176,14 +190,43 @@ function cmdInit() {
       'nav:sync': 'openprototype nav:sync'
     };
     let added = 0;
+    let allowedInstallScript = false;
     for (const [k, v] of Object.entries(want)) {
       if (!pkg.scripts[k]) { pkg.scripts[k] = v; added++; }
       else info(C.dim(`  保留你已有的 scripts.${k}`));
     }
+    if (pkg.allowScripts === undefined) pkg.allowScripts = {};
+    if (pkg.allowScripts && typeof pkg.allowScripts === 'object' && pkg.allowScripts.openprototype === false) {
+      serviceInstallDenied = true;
+    }
+    if (pkg.allowScripts && typeof pkg.allowScripts === 'object' && pkg.allowScripts.openprototype === undefined) {
+      pkg.allowScripts.openprototype = true;
+      allowedInstallScript = true;
+    }
     fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
     ok(`package.json 脚本已合并（新增 ${added} 条）`);
+    if (allowedInstallScript) ok('已允许 openprototype 运行 npm 安装钩子');
   } else {
     info(C.y('  未发现 package.json，跳过脚本合并（可手动 npm init）'));
+  }
+
+  const envServicePolicy = String(process.env.OPENPROTOTYPE_SERVICE_AUTO_INSTALL || '').toLowerCase();
+  const envServiceDisabled = ['0', 'false', 'off'].includes(envServicePolicy);
+  if (isSupportedPlatform() && !serviceInstallDenied && !envServiceDisabled) {
+    const config = loadOrInitConfig(root);
+    if (!config.service || config.service.autoInstall !== false) {
+      try {
+        const result = await installService({ projectRoot: root, explicit: false });
+        if (!result.skipped) ok(`常驻服务已启动：http://127.0.0.1:${config.port}`);
+      } catch (err) {
+        info(C.y(`! 常驻服务未能自动启动：${err.message}`));
+        info(C.dim('  可稍后运行 `npx openprototype service install` 重试。'));
+      }
+    } else {
+      info(C.dim('  已按 service.autoInstall=false 跳过常驻服务。'));
+    }
+  } else if (serviceInstallDenied || envServiceDisabled) {
+    info(C.dim('  已按安装脚本策略跳过常驻服务。'));
   }
 
   info(C.g('\n✔ 已植入。运行 `npx openprototype add-product <id>` 建第一个产品壳。\n'));
@@ -218,8 +261,87 @@ function runNode(scriptRel, extraArgs) {
   process.exit(r.status || 0);
 }
 
+function printServiceStatus(status) {
+  const labels = {
+    running: C.g('运行中'),
+    stopped: C.y('已注册，当前停止'),
+    'port-conflict': C.r('端口被其他进程占用'),
+    stale: C.y('注册已失效'),
+    unregistered: C.dim('未安装')
+  };
+  info(`状态: ${labels[status.state] || status.state}`);
+  info(`项目: ${status.projectRoot}`);
+  info(`服务 ID: ${status.serviceId}`);
+  info(`地址: http://127.0.0.1:${status.port}`);
+  if (status.pid) info(`PID: ${status.pid}`);
+  if (status.version) info(`版本: ${status.version}`);
+  if (status.startedAt) info(`启动时间: ${status.startedAt}`);
+  if (status.configDrift || status.versionDrift || status.nodeDrift) {
+    info(C.y('配置、包版本或 Node 路径已变化，请运行 openprototype service restart'));
+  }
+  info(`日志: ${status.logPath}`);
+}
+
+async function cmdService(argv) {
+  const action = argv[0] || 'status';
+  const json = argv.includes('--json');
+  try {
+    if (action === 'install' || action === 'restart') {
+      const result = await installService({
+        projectRoot: process.cwd(),
+        allowLan: argv.includes('--allow-lan'),
+        explicit: true
+      });
+      const status = await serviceStatus(process.cwd());
+      if (json) info(JSON.stringify(status, null, 2));
+      else { ok(action === 'restart' ? '常驻服务已重启' : '常驻服务已安装并启动'); printServiceStatus(status); }
+      return result;
+    }
+    if (action === 'start') {
+      const status = await startService(process.cwd());
+      if (json) info(JSON.stringify(status, null, 2));
+      else { ok('常驻服务已启动'); printServiceStatus(status); }
+      return;
+    }
+    if (action === 'stop') {
+      const result = stopService(process.cwd());
+      if (json) info(JSON.stringify(result, null, 2));
+      else ok('常驻服务已停止；下次登录仍会自动启动，永久取消请运行 service uninstall');
+      return;
+    }
+    if (action === 'uninstall') {
+      const result = uninstallService(process.cwd());
+      if (json) info(JSON.stringify(result, null, 2));
+      else { ok('常驻服务注册已删除'); info(C.dim(`日志保留在 ${result.logPath}`)); }
+      return;
+    }
+    if (action === 'prune') {
+      const removed = pruneServices();
+      if (json) info(JSON.stringify({ removed }, null, 2));
+      else if (removed.length) ok(`已清理 ${removed.length} 个失效服务注册`);
+      else info(C.dim('没有需要清理的失效服务。'));
+      return;
+    }
+    if (action === 'logs') {
+      const log = readLog(process.cwd(), 100);
+      if (json) info(JSON.stringify(log, null, 2));
+      else { info(C.dim(`日志：${log.path}\n`)); info(log.content || C.dim('暂无日志。')); }
+      return;
+    }
+    if (action === 'status') {
+      const status = await serviceStatus(process.cwd());
+      if (json) info(JSON.stringify(status, null, 2));
+      else printServiceStatus(status);
+      return;
+    }
+    die('用法：openprototype service <install|start|stop|restart|status|logs|uninstall|prune>');
+  } catch (err) {
+    die(err.message);
+  }
+}
+
 // ── 命令：doctor ────────────────────────────────────────
-function cmdDoctor() {
+async function cmdDoctor() {
   info(C.b('\nopenprototype 体检\n'));
   let warn = 0;
 
@@ -242,6 +364,29 @@ function cmdDoctor() {
 
   try { require.resolve('playwright'); ok('Playwright 已安装（冒烟测试可用）'); }
   catch { console.log(C.y('! ') + 'Playwright 未安装（`npm i -D playwright && npx playwright install chromium` 后可跑冒烟测试）'); warn++; }
+
+  if (isSupportedPlatform() && fs.existsSync(cfg)) {
+    try {
+      const status = await serviceStatus(process.cwd());
+      if (status.running && !status.configDrift && !status.versionDrift && !status.nodeDrift) {
+        ok(`常驻服务运行中（PID ${status.pid}，端口 ${status.port}）`);
+      } else if (status.running) {
+        console.log(C.y('! ') + '常驻服务正在运行，但配置、包版本或 Node 路径已变化');
+        info(C.dim('    应用更新：npx openprototype service restart'));
+        warn++;
+      }
+      else {
+        console.log(C.y('! ') + `常驻服务状态：${status.state}`);
+        info(C.dim('    修复：npx openprototype service install'));
+        warn++;
+      }
+    } catch (err) {
+      console.log(C.y('! ') + `常驻服务检查失败：${err.message}`);
+      warn++;
+    }
+  } else if (!isSupportedPlatform()) {
+    info(C.dim('  常驻服务：当前平台不支持（仅 macOS / Windows）'));
+  }
 
   info(warn ? C.y(`\n完成，${warn} 项需要注意。\n`) : C.g('\n全部正常。\n'));
 }
@@ -267,6 +412,7 @@ ${C.b('openprototype')} — 本地原型工作台脚手架
   ${C.g('openprototype init')}               把框架植入当前已有项目（非破坏式）
   ${C.g('openprototype add-product <id>')}   新增一个产品壳（默认 pc）
   ${C.g('openprototype serve')}              启动本地服务器
+  ${C.g('openprototype service <action>')}   管理常驻服务（install/start/stop/restart/status/logs/uninstall/prune）
   ${C.g('openprototype check [--changed]')}  自动化检查（静态红线 + 冒烟）
   ${C.g('openprototype nav:sync')}           重建各产品 nav-tree.json
   ${C.g('openprototype doctor')}             体检（Node / OpenCode / 配置 / Playwright）
@@ -274,13 +420,14 @@ ${C.b('openprototype')} — 本地原型工作台脚手架
 `);
 }
 
-function main() {
+async function main() {
   const [cmd, ...argv] = process.argv.slice(2);
   switch (cmd) {
     case 'create': return cmdCreate(argv);
     case 'init': return cmdInit();
     case 'add-product': return cmdAddProduct(argv);
-    case 'serve': return runNode('runtime/server.js', []);
+    case 'serve': return runNode('runtime/server.js', argv);
+    case 'service': return cmdService(argv);
     case 'check': return runNode('scripts/check/run-checks.js', argv);
     case 'nav:sync':
     case 'nav-sync': return runNode('scripts/check/sync-nav-tree.js', argv);
@@ -294,4 +441,4 @@ function main() {
   }
 }
 
-main();
+main().catch((err) => die(err.message));

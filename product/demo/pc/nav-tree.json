@@ -3,12 +3,12 @@
     "name": "customer",
     "children": [
       {
-        "file": "customer_form.html",
-        "path": "customer/customer_form.html"
-      },
-      {
         "file": "customer_list.html",
         "path": "customer/customer_list.html"
+      },
+      {
+        "file": "customer_form.html",
+        "path": "customer/customer_form.html"
       }
     ]
   }

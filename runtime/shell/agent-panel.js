@@ -200,7 +200,10 @@
       const dot = document.createElement('span');
       dot.className = 'agent-tool-status';
       tool.appendChild(dot);
-      appendText(tool, '', (part.state && part.state.title) || part.tool || '执行工具');
+      const fallbackTitle = part.tool === 'question'
+        ? (status === 'completed' ? '已收到回答' : status === 'error' ? '提问失败' : '等待你的回答')
+        : (part.tool || '执行工具');
+      appendText(tool, '', (part.state && part.state.title) || fallbackTitle);
       wrapper.appendChild(tool);
     });
     return wrapper;
@@ -229,26 +232,56 @@
   function renderQuestion(item) {
     const card = document.createElement('div');
     card.className = 'agent-request-card';
-    appendText(card, 'agent-request-title', 'OpenCode 需要你的选择');
+    appendText(card, 'agent-request-title', 'OpenCode 正在等待你的回答');
     const questions = Array.isArray(item.questions) ? item.questions : [];
     questions.forEach((question, index) => {
-      appendText(card, 'agent-request-desc', question.question || question.header || `问题 ${index + 1}`);
-      const field = document.createElement(question.options && question.options.length ? 'select' : 'input');
-      field.className = 'agent-question-field';
-      field.dataset.questionIndex = String(index);
-      if (field.tagName === 'SELECT') {
-        question.options.forEach(option => {
-          const optionElement = document.createElement('option');
-          optionElement.value = option.label || option.value || String(option);
-          optionElement.textContent = option.label || option.value || String(option);
-          field.appendChild(optionElement);
+      const block = document.createElement('div');
+      block.className = 'agent-question';
+      block.dataset.questionIndex = String(index);
+      if (question.header) appendText(block, 'agent-question-header', question.header);
+      appendText(block, 'agent-request-desc', question.question || question.header || `问题 ${index + 1}`);
+
+      const options = Array.isArray(question.options) ? question.options : [];
+      if (options.length) {
+        const optionList = document.createElement('div');
+        optionList.className = 'agent-question-options';
+        options.forEach(option => {
+          const label = document.createElement('label');
+          label.className = 'agent-question-option';
+          const input = document.createElement('input');
+          input.type = question.multiple ? 'checkbox' : 'radio';
+          input.name = `agent-question-${item.id}-${index}`;
+          input.value = option.label || option.value || String(option);
+          input.className = 'agent-question-choice';
+          label.appendChild(input);
+          const content = document.createElement('span');
+          appendText(content, 'agent-question-option-label', input.value);
+          if (option.description) appendText(content, 'agent-question-option-desc', option.description);
+          label.appendChild(content);
+          optionList.appendChild(label);
         });
-      } else {
-        field.type = 'text';
-        field.placeholder = '输入回答';
+        block.appendChild(optionList);
       }
-      card.appendChild(field);
+
+      if (question.custom !== false) {
+        const custom = document.createElement('input');
+        custom.type = 'text';
+        custom.className = 'agent-question-field';
+        custom.placeholder = options.length ? '其他，请输入' : '输入回答';
+        if (!question.multiple) {
+          custom.addEventListener('input', () => {
+            if (!custom.value.trim()) return;
+            block.querySelectorAll('.agent-question-choice').forEach(choice => { choice.checked = false; });
+          });
+          block.querySelectorAll('.agent-question-choice').forEach(choice => {
+            choice.addEventListener('change', () => { if (choice.checked) custom.value = ''; });
+          });
+        }
+        block.appendChild(custom);
+      }
+      card.appendChild(block);
     });
+    const error = appendText(card, 'agent-question-error', '');
     const actions = document.createElement('div');
     actions.className = 'agent-request-actions';
     const submit = document.createElement('button');
@@ -256,7 +289,16 @@
     submit.className = 'agent-request-btn is-primary';
     submit.textContent = '提交回答';
     submit.addEventListener('click', () => {
-      const answers = Array.from(card.querySelectorAll('.agent-question-field')).map(field => [field.value]);
+      const answers = Array.from(card.querySelectorAll('.agent-question')).map(block => {
+        const selected = Array.from(block.querySelectorAll('.agent-question-choice:checked')).map(choice => choice.value);
+        const custom = block.querySelector('.agent-question-field');
+        if (custom && custom.value.trim()) selected.push(custom.value.trim());
+        return selected;
+      });
+      if (answers.some(answer => !answer.length)) {
+        error.textContent = '请回答全部问题后再提交';
+        return;
+      }
       replyQuestion(item.id, answers);
     });
     actions.appendChild(submit);
@@ -280,9 +322,6 @@
 
   function renderMessages() {
     refs.messages.replaceChildren();
-    state.pending.permissions.forEach(item => refs.messages.appendChild(renderPermission(item)));
-    state.pending.questions.forEach(item => refs.messages.appendChild(renderQuestion(item)));
-
     const diffCard = renderDiff();
     if (diffCard) refs.messages.appendChild(diffCard);
 
@@ -298,6 +337,9 @@
       });
       if (message) refs.messages.appendChild(message);
     }
+
+    state.pending.permissions.forEach(item => refs.messages.appendChild(renderPermission(item)));
+    state.pending.questions.forEach(item => refs.messages.appendChild(renderQuestion(item)));
 
     if (!refs.messages.children.length) {
       const empty = document.createElement('div');

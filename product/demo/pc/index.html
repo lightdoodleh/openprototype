@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" href="data:,">
 <title>Demo 原型导航</title>
 <!-- agent-panel:start (本地开发专用；发布时可由 openprototype publish 自动剥离) -->
 <link rel="stylesheet" href="/_kit/shell/agent-panel.css">
@@ -257,6 +258,32 @@ body.is-resizing-sidebar .preview-frame {
 .folder.search-hidden { display: none; }
 .sidebar-tree.is-searching .folder.search-match-folder > .folder-children { display: block; }
 .sidebar-tree.is-searching .folder.search-match-folder > .folder-head .folder-arrow { transform: none; }
+.folder-head[draggable="true"],
+.file-row[draggable="true"] { cursor: grab; }
+.folder-head.dragging,
+.file-row.dragging { opacity: 0.42; }
+.folder-head.tree-drag-before,
+.folder-head.tree-drag-after,
+.file-row.tree-drag-before,
+.file-row.tree-drag-after { position: relative; }
+.folder-head.tree-drag-before::before,
+.folder-head.tree-drag-after::after,
+.file-row.tree-drag-before::before,
+.file-row.tree-drag-after::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  z-index: 2;
+  border-radius: 2px;
+  background: #1677ff;
+  pointer-events: none;
+}
+.folder-head.tree-drag-before::before,
+.file-row.tree-drag-before::before { top: -1px; }
+.folder-head.tree-drag-after::after,
+.file-row.tree-drag-after::after { bottom: -1px; }
 
 /* ── Folder ── */
 .folder-head {
@@ -702,17 +729,38 @@ function loadVersionCache() { try { return JSON.parse(navStorage.getItem(VER_CAC
 function saveVersionCache() { navStorage.setItem(VER_CACHE_KEY, JSON.stringify(versionCache)); }
 versionCache = loadVersionCache();
 
+function comparePrdVersions(left, right) {
+  const leftParts = String(left || '').replace(/^v/i, '').split('.');
+  const rightParts = String(right || '').replace(/^v/i, '').split('.');
+  const length = Math.max(leftParts.length, rightParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const leftPart = leftParts[index] || '0';
+    const rightPart = rightParts[index] || '0';
+    const leftNumber = /^\d+$/.test(leftPart) ? Number(leftPart) : null;
+    const rightNumber = /^\d+$/.test(rightPart) ? Number(rightPart) : null;
+    const comparison = leftNumber !== null && rightNumber !== null
+      ? leftNumber - rightNumber
+      : leftPart.localeCompare(rightPart, undefined, { numeric: true, sensitivity: 'base' });
+    if (comparison !== 0) return comparison;
+  }
+  return 0;
+}
+
+function extractPrdHistoryMaxVersion(text) {
+  const plainText = String(text || '').replace(/<[^>]+>/g, '');
+  const versions = [...plainText.matchAll(/^\|\s*(v\d+(?:\.[0-9a-z]+)+)\s*\|/gim)].map(match => match[1]);
+  return versions.length
+    ? versions.reduce((maxVersion, version) => comparePrdVersions(version, maxVersion) > 0 ? version : maxVersion)
+    : null;
+}
+
 async function fetchPageVersion(htmlPath) {
   const mdPath = htmlPath.replace(/\.html$/, '.md');
   try {
     const res = await fetch(mdPath, { cache: 'no-cache' });
     if (!res.ok) return null;
     const text = await res.text();
-    // find all version rows like "| V2.10.3 | ..." and take the last one
-    // strip inline HTML tags first so a highlighted version cell (e.g. <span style="color:...">V2.11.3</span>) still matches
-    const plainText = text.replace(/<[^>]+>/g, '');
-    const matches = [...plainText.matchAll(/^\|\s*(V[\d]+\.[\d.]+\w*)\s*\|/gm)];
-    return matches.length ? matches[matches.length - 1][1] : null;
+    return extractPrdHistoryMaxVersion(text);
   } catch { return null; }
 }
 
@@ -845,7 +893,7 @@ function renderReviewButton(path, type, label) {
 
 function refreshReviewButton(button, node) {
   const type = button.getAttribute('data-review-target');
-  const label = type === 'html' ? 'HTML' : 'MD';
+  const label = type === 'html' ? 'HTML' : 'PRD';
   const reviewed = isReviewed(node.path, type);
   const title = label + (reviewed ? ' 已审核' : ' 未审核');
   button.classList.toggle('is-reviewed', reviewed);
@@ -1000,6 +1048,123 @@ function applyTitleSearch() {
 //  Render tree
 // ─────────────────────────────────────────────
 let totalCount = 0;
+let dragState = null;
+let reorderSaving = false;
+let suppressTreeClickUntil = 0;
+
+function navNodeKey(node) {
+  return node.file ? 'file:' + node.file : 'folder:' + node.name;
+}
+
+function getTreeLevel(parentKey) {
+  let level = TREE;
+  if (!parentKey) return level;
+  parentKey.split('/').forEach(name => {
+    const folder = level.find(node => !node.file && node.name === name);
+    if (!folder) throw new Error('未找到排序目录');
+    level = folder.children || [];
+  });
+  return level;
+}
+
+function treeSortingBlocked() {
+  return reorderSaving || !!document.getElementById('navSearchInput').value.trim() || document.getElementById('versionFilterToggle').checked;
+}
+
+function clearTreeDragStyles() {
+  document.querySelectorAll('.dragging, .tree-drag-before, .tree-drag-after').forEach(element => {
+    element.classList.remove('dragging', 'tree-drag-before', 'tree-drag-after');
+    delete element.dataset.dropPosition;
+  });
+}
+
+function clearTreeDropStyles() {
+  document.querySelectorAll('.tree-drag-before, .tree-drag-after').forEach(element => {
+    element.classList.remove('tree-drag-before', 'tree-drag-after');
+    delete element.dataset.dropPosition;
+  });
+}
+
+function setupTreeDrag(element, parentKey, nodeKey) {
+  element.draggable = true;
+  element.dataset.parentKey = parentKey;
+  element.dataset.nodeKey = nodeKey;
+  element.title = element.title || '拖动调整同级排序';
+
+  element.addEventListener('dragstart', event => {
+    if (treeSortingBlocked()) {
+      event.preventDefault();
+      showToast(reorderSaving ? '正在保存排序' : '请先清除搜索或版本筛选再排序');
+      return;
+    }
+    dragState = { parentKey, nodeKey };
+    suppressTreeClickUntil = Date.now() + 400;
+    element.classList.add('dragging');
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', nodeKey);
+  });
+
+  element.addEventListener('dragover', event => {
+    if (!dragState || dragState.parentKey !== parentKey || dragState.nodeKey === nodeKey) return;
+    event.preventDefault();
+    event.stopPropagation();
+    clearTreeDropStyles();
+    element.classList.add(event.clientY < element.getBoundingClientRect().top + element.offsetHeight / 2 ? 'tree-drag-before' : 'tree-drag-after');
+    element.dataset.dropPosition = element.classList.contains('tree-drag-before') ? 'before' : 'after';
+    event.dataTransfer.dropEffect = 'move';
+  });
+
+  element.addEventListener('drop', event => {
+    if (!dragState || dragState.parentKey !== parentKey || dragState.nodeKey === nodeKey) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const position = element.dataset.dropPosition || 'before';
+    const sourceKey = dragState.nodeKey;
+    clearTreeDragStyles();
+    dragState = null;
+    reorderTreeNodes(parentKey, sourceKey, nodeKey, position);
+  });
+
+  element.addEventListener('dragend', () => {
+    clearTreeDragStyles();
+    dragState = null;
+  });
+}
+
+async function reorderTreeNodes(parentKey, sourceKey, targetKey, position) {
+  const level = getTreeLevel(parentKey);
+  const beforeOrder = level.map(navNodeKey);
+  const sourceIndex = beforeOrder.indexOf(sourceKey);
+  if (sourceIndex < 0) return;
+  const sourceNode = level.splice(sourceIndex, 1)[0];
+  const targetIndex = level.findIndex(node => navNodeKey(node) === targetKey);
+  if (targetIndex < 0) {
+    level.splice(sourceIndex, 0, sourceNode);
+    return;
+  }
+  level.splice(targetIndex + (position === 'after' ? 1 : 0), 0, sourceNode);
+  const orderedKeys = level.map(navNodeKey);
+  if (orderedKeys.every((key, index) => key === beforeOrder[index])) return;
+
+  reorderSaving = true;
+  renderTree();
+  try {
+    const res = await fetch('/api/reorder-nav', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base: PAGE_BASE, parent: parentKey, orderedKeys })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || '排序保存失败：' + res.status);
+    showToast('排序已保存');
+  } catch (err) {
+    try { await loadTree(); } catch {}
+    renderTree();
+    showToast(err.message);
+  } finally {
+    reorderSaving = false;
+  }
+}
 
 function renderNodes(nodes, depth, trail) {
   const wrap = document.createElement('div');
@@ -1013,19 +1178,22 @@ function renderNodes(nodes, depth, trail) {
       row.className = 'file-row';
       row.dataset.path = node.path;
       row.dataset.searchText = [node.file, node.path, breadcrumbMap[node.path] || ''].join(' ');
+      setupTreeDrag(row, trail, navNodeKey(node));
       row.innerHTML = `
         <div class="file-main">
           <span class="file-icon">${I_FILE}</span>
           <span class="file-name" title="${node.file}">${node.file}</span>
           <span class="version-badge"></span>
           <!-- review-btn:start (个人审核标记，本地开发专用；发布时可自动剥离) -->
+          ${renderReviewButton(node.path, 'md', 'PRD')}
           ${renderReviewButton(node.path, 'html', 'HTML')}
-          ${renderReviewButton(node.path, 'md', 'MD')}
           <!-- review-btn:end -->
         </div>`;
 
       // click row → preview
-      row.querySelector('.file-main').addEventListener('click', () => loadPreview(node.path, row));
+      row.querySelector('.file-main').addEventListener('click', () => {
+        if (Date.now() >= suppressTreeClickUntil) loadPreview(node.path, row);
+      });
 
       row.querySelectorAll('.review-btn').forEach(button => {
         button.addEventListener('click', e => {
@@ -1044,8 +1212,11 @@ function renderNodes(nodes, depth, trail) {
 
       const head = document.createElement('div');
       head.className = 'folder-head';
+      setupTreeDrag(head, trail, navNodeKey(node));
       head.innerHTML = `<span class="folder-arrow">${I_ARROW}</span><span class="folder-icon">${I_FOLDER}</span><span class="folder-name">${node.name}</span><button type="button" class="tree-add-btn" data-create="page" title="在此文件夹新建页面">＋页</button><button type="button" class="tree-add-btn" data-create="folder" title="在此文件夹新建子文件夹">＋夹</button>`;
-      head.addEventListener('click', () => folder.classList.toggle('collapsed'));
+      head.addEventListener('click', () => {
+        if (Date.now() >= suppressTreeClickUntil) folder.classList.toggle('collapsed');
+      });
       head.querySelectorAll('.tree-add-btn').forEach(btn => {
         btn.addEventListener('click', e => {
           e.stopPropagation();
