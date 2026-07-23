@@ -1,6 +1,6 @@
 {
   "name": "openprototype",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "本地原型工作台：左侧树形导航 + 中间原型预览 + 右侧 AI Agent（OpenCode）。PRD 与 HTML/JS 原型协作，含自动化检查。",
   "keywords": [
     "prototype",

@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.2](https://github.com/lightdoodleh/OpenPrototype/compare/v1.0.1...v1.0.2) (2026-07-23)
+
+
+### Features
+
+* add local service installation, lifecycle management, and automatic post-install setup ([#11](https://github.com/lightdoodleh/OpenPrototype/pull/11))
+* support navigation tree drag-and-drop reordering ([#11](https://github.com/lightdoodleh/OpenPrototype/pull/11))
+
+
+### Bug Fixes
+
+* run npm reliably in Windows service smoke tests ([e267e41](https://github.com/lightdoodleh/OpenPrototype/commit/e267e4184e5d21a327e3e035991492864378c8d2))
+* supervise and restart the Windows service process ([7e757c1](https://github.com/lightdoodleh/OpenPrototype/commit/7e757c12b3ffd2e524c437e4134ecf53119620c0))
+
+
+### Documentation
+
+* refresh README screenshots and presentation ([#10](https://github.com/lightdoodleh/OpenPrototype/pull/10))
+
 ## [1.0.1](https://github.com/lightdoodleh/OpenPrototype/compare/v1.0.0...v1.0.1) (2026-07-17)
 
 
