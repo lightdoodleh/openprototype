@@ -284,6 +284,11 @@ body.is-resizing-sidebar .preview-frame {
 .file-row.tree-drag-before::before { top: -1px; }
 .folder-head.tree-drag-after::after,
 .file-row.tree-drag-after::after { bottom: -1px; }
+.folder-head.tree-drag-into {
+  color: #0958d9;
+  background: #e6f4ff;
+  box-shadow: inset 0 0 0 1px #1677ff;
+}
 
 /* ── Folder ── */
 .folder-head {
@@ -597,12 +602,8 @@ body.is-resizing-sidebar .preview-frame {
     <div class="create-modal-title" id="createModalTitle">新建页面</div>
     <div class="create-modal-location" id="createModalLocation"></div>
     <div class="create-modal-field">
-      <label for="createNameInput">名称（作为文件 / 目录名，支持中文、字母、数字、_ 和 -）</label>
-      <input id="createNameInput" type="text" placeholder="如 order_list" autocomplete="off">
-    </div>
-    <div class="create-modal-field" id="createTitleField">
-      <label for="createTitleInput">页面标题（可选，用于页面 &lt;title&gt; 与 PRD）</label>
-      <input id="createTitleInput" type="text" placeholder="如 订单列表" autocomplete="off">
+      <label for="createNameInput" id="createNameLabel">名称</label>
+      <input id="createNameInput" type="text" placeholder="如 订单列表" autocomplete="off">
     </div>
     <div class="create-modal-error" id="createModalError"></div>
     <div class="create-modal-actions">
@@ -822,7 +823,8 @@ const breadcrumbMap = {};
 function buildBreadcrumbs(nodes, trail) {
   nodes.forEach(n => {
     if (n.file) {
-      breadcrumbMap[n.path] = trail ? trail + ' / ' + n.file : n.file;
+      const label = n.title || n.file;
+      breadcrumbMap[n.path] = trail ? trail + ' / ' + label : label;
     } else {
       buildBreadcrumbs(n.children || [], trail ? trail + ' / ' + n.name : n.name);
     }
@@ -1072,24 +1074,24 @@ function treeSortingBlocked() {
 }
 
 function clearTreeDragStyles() {
-  document.querySelectorAll('.dragging, .tree-drag-before, .tree-drag-after').forEach(element => {
-    element.classList.remove('dragging', 'tree-drag-before', 'tree-drag-after');
+  document.querySelectorAll('.dragging, .tree-drag-before, .tree-drag-after, .tree-drag-into').forEach(element => {
+    element.classList.remove('dragging', 'tree-drag-before', 'tree-drag-after', 'tree-drag-into');
     delete element.dataset.dropPosition;
   });
 }
 
 function clearTreeDropStyles() {
-  document.querySelectorAll('.tree-drag-before, .tree-drag-after').forEach(element => {
-    element.classList.remove('tree-drag-before', 'tree-drag-after');
+  document.querySelectorAll('.tree-drag-before, .tree-drag-after, .tree-drag-into').forEach(element => {
+    element.classList.remove('tree-drag-before', 'tree-drag-after', 'tree-drag-into');
     delete element.dataset.dropPosition;
   });
 }
 
-function setupTreeDrag(element, parentKey, nodeKey) {
+function setupTreeDrag(element, parentKey, nodeKey, targetFolderKey) {
   element.draggable = true;
   element.dataset.parentKey = parentKey;
   element.dataset.nodeKey = nodeKey;
-  element.title = element.title || '拖动调整同级排序';
+  element.title = element.title || (targetFolderKey ? '拖动调整同级排序，或将页面拖入此文件夹' : '拖动调整同级排序');
 
   element.addEventListener('dragstart', event => {
     if (treeSortingBlocked()) {
@@ -1097,7 +1099,12 @@ function setupTreeDrag(element, parentKey, nodeKey) {
       showToast(reorderSaving ? '正在保存排序' : '请先清除搜索或版本筛选再排序');
       return;
     }
-    dragState = { parentKey, nodeKey };
+    dragState = {
+      parentKey,
+      nodeKey,
+      sourcePath: element.dataset.path || '',
+      isPage: nodeKey.startsWith('file:')
+    };
     suppressTreeClickUntil = Date.now() + 400;
     element.classList.add('dragging');
     event.dataTransfer.effectAllowed = 'move';
@@ -1105,7 +1112,17 @@ function setupTreeDrag(element, parentKey, nodeKey) {
   });
 
   element.addEventListener('dragover', event => {
-    if (!dragState || dragState.parentKey !== parentKey || dragState.nodeKey === nodeKey) return;
+    if (!dragState) return;
+    const isMoveIntoFolder = targetFolderKey && dragState.isPage && dragState.parentKey !== targetFolderKey;
+    if (isMoveIntoFolder) {
+      event.preventDefault();
+      event.stopPropagation();
+      clearTreeDropStyles();
+      element.classList.add('tree-drag-into');
+      event.dataTransfer.dropEffect = 'move';
+      return;
+    }
+    if (dragState.parentKey !== parentKey || dragState.nodeKey === nodeKey) return;
     event.preventDefault();
     event.stopPropagation();
     clearTreeDropStyles();
@@ -1115,11 +1132,22 @@ function setupTreeDrag(element, parentKey, nodeKey) {
   });
 
   element.addEventListener('drop', event => {
-    if (!dragState || dragState.parentKey !== parentKey || dragState.nodeKey === nodeKey) return;
+    if (!dragState) return;
+    const currentDrag = dragState;
+    const isMoveIntoFolder = targetFolderKey && currentDrag.isPage && currentDrag.parentKey !== targetFolderKey;
+    if (isMoveIntoFolder) {
+      event.preventDefault();
+      event.stopPropagation();
+      clearTreeDragStyles();
+      dragState = null;
+      movePageToFolder(currentDrag.sourcePath, targetFolderKey);
+      return;
+    }
+    if (currentDrag.parentKey !== parentKey || currentDrag.nodeKey === nodeKey) return;
     event.preventDefault();
     event.stopPropagation();
     const position = element.dataset.dropPosition || 'before';
-    const sourceKey = dragState.nodeKey;
+    const sourceKey = currentDrag.nodeKey;
     clearTreeDragStyles();
     dragState = null;
     reorderTreeNodes(parentKey, sourceKey, nodeKey, position);
@@ -1129,6 +1157,50 @@ function setupTreeDrag(element, parentKey, nodeKey) {
     clearTreeDragStyles();
     dragState = null;
   });
+}
+
+function movePageLocalState(sourcePath, targetPath) {
+  if (Object.prototype.hasOwnProperty.call(versionCache, sourcePath)) {
+    versionCache[targetPath] = versionCache[sourcePath];
+    delete versionCache[sourcePath];
+    saveVersionCache();
+  }
+  if (reviewStatus[sourcePath]) {
+    reviewStatus[targetPath] = reviewStatus[sourcePath];
+    delete reviewStatus[sourcePath];
+    saveReviewStatus();
+  }
+}
+
+async function movePageToFolder(sourcePath, targetFolder) {
+  if (!sourcePath || !targetFolder) return;
+  const wasActive = !!(activeRow && activeRow.dataset.path === sourcePath);
+  reorderSaving = true;
+  try {
+    const res = await fetch('/api/move-page', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base: PAGE_BASE, sourcePath, targetFolder })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || '移动失败：' + res.status);
+    movePageLocalState(sourcePath, data.path);
+    await loadTree();
+    renderTree();
+    expandFolderTrail(targetFolder);
+    if (wasActive) {
+      const row = document.querySelector(`.file-row[data-path="${CSS.escape(data.path)}"]`);
+      if (row) loadPreview(data.path, row);
+    }
+    fetchAllVersions();
+    showToast('页面已移入：' + targetFolder);
+  } catch (err) {
+    try { await loadTree(); } catch {}
+    renderTree();
+    showToast(err.message);
+  } finally {
+    reorderSaving = false;
+  }
 }
 
 async function reorderTreeNodes(parentKey, sourceKey, targetKey, position) {
@@ -1177,12 +1249,13 @@ function renderNodes(nodes, depth, trail) {
       const row = document.createElement('div');
       row.className = 'file-row';
       row.dataset.path = node.path;
-      row.dataset.searchText = [node.file, node.path, breadcrumbMap[node.path] || ''].join(' ');
+      const pageLabel = node.title || node.file;
+      row.dataset.searchText = [pageLabel, node.file, node.path, breadcrumbMap[node.path] || ''].join(' ');
       setupTreeDrag(row, trail, navNodeKey(node));
       row.innerHTML = `
         <div class="file-main">
           <span class="file-icon">${I_FILE}</span>
-          <span class="file-name" title="${node.file}">${node.file}</span>
+          <span class="file-name" title="${node.file}">${pageLabel}</span>
           <span class="version-badge"></span>
           <!-- review-btn:start (个人审核标记，本地开发专用；发布时可自动剥离) -->
           ${renderReviewButton(node.path, 'md', 'PRD')}
@@ -1212,7 +1285,7 @@ function renderNodes(nodes, depth, trail) {
 
       const head = document.createElement('div');
       head.className = 'folder-head';
-      setupTreeDrag(head, trail, navNodeKey(node));
+      setupTreeDrag(head, trail, navNodeKey(node), folderKey);
       head.innerHTML = `<span class="folder-arrow">${I_ARROW}</span><span class="folder-icon">${I_FOLDER}</span><span class="folder-name">${node.name}</span><button type="button" class="tree-add-btn" data-create="page" title="在此文件夹新建页面">＋页</button><button type="button" class="tree-add-btn" data-create="folder" title="在此文件夹新建子文件夹">＋夹</button>`;
       head.addEventListener('click', () => {
         if (Date.now() >= suppressTreeClickUntil) folder.classList.toggle('collapsed');
@@ -1273,9 +1346,11 @@ function openCreateModal(type, parentPath) {
   createModalState = { type, parentPath: parentPath || '' };
   document.getElementById('createModalTitle').textContent = type === 'folder' ? '新建文件夹' : '新建页面';
   document.getElementById('createModalLocation').textContent = '位置：' + (parentPath ? parentPath + '/' : '根目录');
-  document.getElementById('createTitleField').style.display = type === 'page' ? '' : 'none';
+  document.getElementById('createNameLabel').textContent = type === 'folder'
+    ? '名称（作为文件夹名和左侧导航名称；支持中文、字母、数字、_ 和 -）'
+    : '名称（用于文件名、左侧导航、页面 <title> 与 PRD；支持中文、字母、数字、_ 和 -）';
+  document.getElementById('createNameInput').placeholder = type === 'folder' ? '如 customer' : '如 订单列表';
   document.getElementById('createNameInput').value = '';
-  document.getElementById('createTitleInput').value = '';
   document.getElementById('createModalError').textContent = '';
   document.getElementById('createModalMask').classList.add('show');
   document.getElementById('createNameInput').focus();
@@ -1308,7 +1383,6 @@ async function submitCreateModal() {
   errorEl.textContent = '';
   try {
     const payload = { base: PAGE_BASE, parent: parentPath, name };
-    if (type === 'page') payload.title = document.getElementById('createTitleInput').value.trim();
     const res = await fetch(type === 'folder' ? '/api/create-folder' : '/api/create-page', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1431,7 +1505,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('createModalMask').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeCreateModal();
   });
-  [document.getElementById('createNameInput'), document.getElementById('createTitleInput')].forEach(input => {
+  [document.getElementById('createNameInput')].forEach(input => {
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); submitCreateModal(); }
       else if (e.key === 'Escape') closeCreateModal();

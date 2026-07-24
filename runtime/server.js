@@ -232,6 +232,99 @@ function navNodeKey(node) {
   return node.file ? `file:${node.file}` : `folder:${node.name}`;
 }
 
+function resolvePageFile(rootDir, inputPath) {
+  const relPath = String(inputPath || '').replace(/^\/+|\/+$/g, '');
+  const segments = relPath.split('/').filter(Boolean);
+  const fileName = segments.pop();
+  if (!fileName || !fileName.toLowerCase().endsWith('.html')) {
+    throw new Error('仅允许移动 .html 页面');
+  }
+  const pageName = fileName.slice(0, -'.html'.length);
+  assertValidSegment(pageName, '页面名');
+  segments.forEach((seg) => assertValidSegment(seg, '页面目录名'));
+  const parent = segments.join('/');
+  const dir = path.join(rootDir, ...segments);
+  const file = path.join(dir, fileName);
+  if (file !== rootDir && !file.startsWith(rootDir + path.sep)) throw new Error('页面路径超出产品范围');
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new Error('源页面不存在');
+  return { dir, parent, file, fileName, pageName, relPath: [...segments, fileName].join('/') };
+}
+
+function saveNavTreeAtomically(rootDir, tree) {
+  const file = path.join(rootDir, 'nav-tree.json');
+  const tempFile = path.join(rootDir, `.nav-tree-${process.pid}-${Date.now()}.tmp`);
+  try {
+    fs.writeFileSync(tempFile, JSON.stringify(tree, null, 2) + '\n');
+    fs.renameSync(tempFile, file);
+  } finally {
+    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+  }
+}
+
+function handleMovePage(req, res) {
+  readJsonBody(req, 64 * 1024, (parseErr, data) => {
+    const moved = [];
+    try {
+      if (parseErr) throw parseErr;
+      const rootDir = resolveProductRootDir(data.base);
+      const source = resolvePageFile(rootDir, data.sourcePath);
+      const { dir: targetDir, rel: targetFolder } = resolveParentDir(rootDir, data.targetFolder);
+      if (source.parent === targetFolder) throw new Error('页面已在目标文件夹中');
+
+      const bundleNames = [`${source.pageName}.html`, `${source.pageName}.js`, `${source.pageName}.md`];
+      const conflicts = bundleNames.filter((name) => fs.existsSync(path.join(targetDir, name)));
+      if (conflicts.length) throw new Error(`目标文件夹已存在同名文件：${conflicts.join('、')}`);
+
+      const bundle = bundleNames
+        .map((name) => ({ source: path.join(source.dir, name), target: path.join(targetDir, name), name }))
+        .filter((item) => fs.existsSync(item.source) && fs.statSync(item.source).isFile());
+      if (!bundle.some((item) => item.name === source.fileName)) throw new Error('源页面不存在');
+
+      const tree = loadNavTree(rootDir);
+      const sourceLevel = getNavLevel(tree, source.parent);
+      const sourceIndex = sourceLevel.findIndex((node) => node.file === source.fileName && node.path === source.relPath);
+      if (sourceIndex < 0) throw new Error('导航树中不存在源页面，请刷新后重试');
+      const sourceNode = sourceLevel[sourceIndex];
+      const targetLevel = getNavLevel(tree, targetFolder);
+      const targetPath = targetFolder ? `${targetFolder}/${source.fileName}` : source.fileName;
+
+      bundle.forEach((item) => {
+        fs.renameSync(item.source, item.target);
+        moved.push(item);
+      });
+      sourceLevel.splice(sourceIndex, 1);
+      targetLevel.push({
+        file: source.fileName,
+        path: targetPath,
+        ...(sourceNode.title ? { title: sourceNode.title } : {})
+      });
+      saveNavTreeAtomically(rootDir, tree);
+
+      console.log(`[200] POST /api/move-page -> ${source.relPath} => ${targetPath}`);
+      sendJson(res, 200, {
+        ok: true,
+        sourcePath: source.relPath,
+        path: targetPath,
+        movedFiles: moved.map((item) => targetFolder ? `${targetFolder}/${item.name}` : item.name)
+      });
+    } catch (err) {
+      const rollbackErrors = [];
+      moved.reverse().forEach((item) => {
+        try {
+          if (fs.existsSync(item.target) && !fs.existsSync(item.source)) fs.renameSync(item.target, item.source);
+        } catch (rollbackErr) {
+          rollbackErrors.push(rollbackErr.message);
+        }
+      });
+      const errorMessage = rollbackErrors.length
+        ? `${err.message}；回滚失败：${rollbackErrors.join('、')}`
+        : err.message;
+      console.log(`[400] POST /api/move-page -> ${errorMessage}`);
+      sendJson(res, 400, { ok: false, error: errorMessage });
+    }
+  });
+}
+
 function todayString() {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, '0');
@@ -321,7 +414,7 @@ function handleCreatePage(req, res) {
       const { dir: parentDir, rel: parentRel } = resolveParentDir(rootDir, data.parent);
       const name = String(data.name || '').trim().replace(/\.html$/i, '');
       assertValidSegment(name, '页面名');
-      const title = String(data.title || '').trim() || name;
+      const title = name;
       const htmlFile = path.join(parentDir, `${name}.html`);
       const mdFile = path.join(parentDir, `${name}.md`);
       if (fs.existsSync(htmlFile)) throw new Error('同名页面已存在');
@@ -331,7 +424,7 @@ function handleCreatePage(req, res) {
       const tree = loadNavTree(rootDir);
       const children = ensureNavFolder(tree, parentRel);
       if (!children.some((n) => n.file === `${name}.html`)) {
-        children.push({ file: `${name}.html`, path: relPath });
+        children.push({ file: `${name}.html`, path: relPath, title });
       }
       saveNavTree(rootDir, tree);
       console.log(`[200] POST /api/create-page -> ${htmlFile}`);
@@ -857,6 +950,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && urlPath === '/api/create-folder') return requireLoopback(req, res) && handleCreateFolder(req, res);
   if (req.method === 'POST' && urlPath === '/api/create-page') return requireLoopback(req, res) && handleCreatePage(req, res);
   if (req.method === 'POST' && urlPath === '/api/reorder-nav') return requireLoopback(req, res) && handleReorderNav(req, res);
+  if (req.method === 'POST' && urlPath === '/api/move-page') return requireLoopback(req, res) && handleMovePage(req, res);
   if (req.method === 'POST' && urlPath === '/api/build-update-page-prompt') return requireLoopback(req, res) && handleBuildUpdatePagePrompt(req, res);
   if (req.method === 'POST' && urlPath === '/api/update-page-from-prd') return requireLoopback(req, res) && handleUpdatePageFromPrd(req, res);
 
