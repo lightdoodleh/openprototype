@@ -9,6 +9,15 @@
       {
         "file": "customer_form.html",
         "path": "customer/customer_form.html"
+      },
+      {
+        "name": "订单",
+        "children": [
+          {
+            "file": "order_list.html",
+            "path": "customer/订单/order_list.html"
+          }
+        ]
       }
     ]
   }

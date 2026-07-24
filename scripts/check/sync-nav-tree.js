@@ -88,6 +88,7 @@ function preserveTreeOrder(nodes, previousNodes) {
   (previousNodes || []).forEach((previousNode) => {
     const node = currentByKey.get(nodeKey(previousNode));
     if (!node) return;
+    if (node.file && previousNode.title) node.title = previousNode.title;
     ordered.push(node);
     currentByKey.delete(nodeKey(previousNode));
   });
