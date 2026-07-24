@@ -5,7 +5,7 @@
  * openprototype CLI
  *
  *   openprototype create <dir>          从零创建一个新项目（场景①）
- *   openprototype init                  把框架植入当前已有项目（场景②，非破坏式）
+ *   openprototype init                  把框架植入当前已有项目（保留已有模板，可能安装常驻服务）
  *   openprototype add-product <id>      新增一个产品壳（默认 pc）
  *   openprototype serve                 启动本地服务器
  *   openprototype service <action>      管理本地常驻服务
@@ -168,7 +168,7 @@ function cmdCreate(argv) {
 async function cmdInit() {
   const root = process.cwd();
   let serviceInstallDenied = false;
-  info(C.b('\n把 openprototype 植入当前项目（非破坏式）…\n'));
+  info(C.b('\n把 openprototype 植入当前项目（保留已有模板，按配置安装常驻服务）…\n'));
 
   copyIfAbsent(path.join(TPL, 'skills'), path.join(root, 'skills'));
   copyIfAbsent(path.join(TPL, 'AGENTS.md'), path.join(root, 'AGENTS.md'));
@@ -409,11 +409,11 @@ ${C.b('openprototype')} — 本地原型工作台脚手架
 
 用法：
   ${C.g('openprototype create <dir>')}       从零创建新项目
-  ${C.g('openprototype init')}               把框架植入当前已有项目（非破坏式）
+  ${C.g('openprototype init')}               补充缺失资产、合并脚本，并按配置安装常驻服务
   ${C.g('openprototype add-product <id>')}   新增一个产品壳（默认 pc）
   ${C.g('openprototype serve')}              启动本地服务器
   ${C.g('openprototype service <action>')}   管理常驻服务（install/start/stop/restart/status/logs/uninstall/prune）
-  ${C.g('openprototype check [--changed]')}  自动化检查（静态红线 + 冒烟）
+  ${C.g('openprototype check [--changed]')}  自动化检查（静态红线；安装 Playwright 后增加冒烟）
   ${C.g('openprototype nav:sync')}           重建各产品 nav-tree.json
   ${C.g('openprototype doctor')}             体检（Node / OpenCode / 配置 / Playwright）
   ${C.g('openprototype update')}             如何更新框架
