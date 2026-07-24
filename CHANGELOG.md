@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/lightdoodleh/OpenPrototype/compare/v1.1.0...v1.1.1) (2026-07-24)
+
+
+### Bug Fixes
+
+* automate npm publish recovery ([7e4760c](https://github.com/lightdoodleh/OpenPrototype/commit/7e4760c0813d919b02d1c15cf0ca2b7d4c70be92))
+* correct CLI command descriptions ([e309467](https://github.com/lightdoodleh/OpenPrototype/commit/e30946799ac44e8b7789b9bb14317b7fa045579f))
+
 ## [1.1.0](https://github.com/lightdoodleh/OpenPrototype/compare/v1.0.2...v1.1.0) (2026-07-24)
 
 
