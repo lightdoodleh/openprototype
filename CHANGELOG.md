@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/lightdoodleh/OpenPrototype/compare/v1.0.2...v1.1.0) (2026-07-24)
+
+
+### Features
+
+* 添加导航栏拖动进入文件夹内的功能 ([e429ed6](https://github.com/lightdoodleh/OpenPrototype/commit/e429ed6c844a79c56e1a5888813d6ccc48cd9044))
+
 ## [1.0.2](https://github.com/lightdoodleh/OpenPrototype/compare/v1.0.1...v1.0.2) (2026-07-23)
 
 
